@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 
-const TEXT_LENGTH_THRESHOLD = 500; // Characters threshold for sync vs async
-
 const VOICE_INFO: Record<string, { gender: string; description: string }> = {
   // 🇺🇸 US English - Female
   "af_heart": { gender: "Female", description: "Warm and expressive with heartfelt delivery" },
@@ -86,64 +84,51 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing text" }, { status: 400 });
     }
 
-    // Decide between sync and async based on text length
-    const useAsync = text.length >= TEXT_LENGTH_THRESHOLD;
-    const endpoint = useAsync ? "run" : "runsync";
+    if (!process.env.DEEPINFRA_API_KEY) {
+      return NextResponse.json({ error: "DeepInfra API key not configured" }, { status: 500 });
+    }
 
-    // Call RunPod Serverless for AI Voice Generation
-    const runpodResponse = await fetch(
-      `https://api.runpod.ai/v2/${process.env.KOKORO_ENDPOINT_ID}/${endpoint}`,
+    // Call DeepInfra Kokoro API
+    const deepinfraResponse = await fetch(
+      "https://api.deepinfra.com/v1/openai/audio/speech",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.RUNPOD_API_KEY}`,
+          Authorization: `Bearer ${process.env.DEEPINFRA_API_KEY}`,
         },
         body: JSON.stringify({
-          input: {
-            text,
-            voice: voice || "Jessica",
-            speed: speed || 1.0,
-            output_format: output_format || "mp3"
-          },
+          model: "hexgrad/Kokoro-82M",
+          input: text,
+          voice: voice || "af_bella",
+          response_format: output_format || "mp3",
+          speed: speed || 1.0,
         }),
       }
     );
 
-    const data = await runpodResponse.json();
-
-    // Handle Response based on endpoint type
-    if (useAsync) {
-      // Async endpoint returns job ID immediately
-      if (data.id) {
-        return NextResponse.json({
-          jobId: data.id,
-          status: "IN_QUEUE"
-        });
-      } else {
-        console.error("RunPod Async Error:", data);
-        return NextResponse.json({ error: "Failed to queue job", details: data }, { status: 500 });
-      }
-    } else {
-      // Sync endpoint returns result directly
-      if (data.status !== "COMPLETED") {
-        console.error("RunPod Sync Error:", data);
-        return NextResponse.json({ error: "Generation failed", details: data }, { status: 500 });
-      }
-
-      const voiceId = data.output.voice;
-      const voiceMetadata = VOICE_INFO[voiceId] || { gender: "Unknown", description: "No description available" };
-
-      return NextResponse.json({
-        audio: data.output.audio, // Base64 audio
-        format: data.output.format,
-        voice: data.output.voice,
-        voiceGender: voiceMetadata.gender,
-        voiceDescription: voiceMetadata.description,
-        duration: data.output.duration,
-        processing_time: data.output.processing_time
-      });
+    if (!deepinfraResponse.ok) {
+      const errorData = await deepinfraResponse.json().catch(() => ({}));
+      return NextResponse.json(
+        { error: "Failed to generate speech", details: errorData },
+        { status: deepinfraResponse.status }
+      );
     }
+
+    const audioBuffer = Buffer.from(await deepinfraResponse.arrayBuffer());
+    const voiceId = voice || "af_bella";
+    const voiceMetadata = VOICE_INFO[voiceId] || { gender: "Unknown", description: "No description available" };
+
+    return new NextResponse(audioBuffer, {
+      status: 200,
+      headers: {
+        'Content-Type': `audio/${output_format || 'mp3'}`,
+        'Content-Length': audioBuffer.length.toString(),
+        'X-Voice-Id': voiceId,
+        'X-Voice-Gender': voiceMetadata.gender,
+        'X-Voice-Description': encodeURIComponent(voiceMetadata.description),
+      },
+    });
 
   } catch (error) {
     console.error(error);

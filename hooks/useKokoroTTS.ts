@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 
 export interface KokoroVoice {
   id: string;
@@ -95,50 +95,36 @@ interface UseKokoroTTSReturn {
 export function useKokoroTTS(): UseKokoroTTSReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const ttsRef = useRef<any>(null);
-
-  const initializeTTS = useCallback(async () => {
-    if (ttsRef.current) return;
-
-    try {
-      setProgress(10);
-      const { KokoroTTS } = await import('kokoro-js');
-      setProgress(30);
-
-      const model_id = "onnx-community/Kokoro-82M-v1.0-ONNX";
-      ttsRef.current = await KokoroTTS.from_pretrained(model_id, {
-        dtype: "q8", // Quantized for faster loading
-        device: "wasm", // Works in browser
-      });
-      setProgress(100);
-
-      setIsInitialized(true);
-    } catch (err) {
-      console.error('Failed to initialize Kokoro TTS:', err);
-      setError(err instanceof Error ? err.message : 'Failed to initialize TTS');
-      throw err;
-    }
-  }, []);
+  const [isInitialized] = useState(true); // Always initialized since we use API
+  const [progress] = useState(100); // Always ready
 
   const generateSpeech = useCallback(async (text: string, voiceId: string, speed: number = 1.0): Promise<string> => {
     setIsLoading(true);
     setError(null);
 
     try {
-      if (!ttsRef.current) {
-        await initializeTTS();
-      }
-
-      const audio = await ttsRef.current.generate(text, {
-        voice: voiceId,
-        speed: speed,
+      // Call our API route which uses DeepInfra
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text,
+          voice: voiceId,
+          speed,
+          output_format: 'mp3',
+        }),
       });
 
-      // Convert audio data to blob URL
-      const wavBlob = await audio.toBlob();
-      const url = URL.createObjectURL(wavBlob);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate speech');
+      }
+
+      // Response is now binary audio data
+      const audioBlob = await response.blob();
+      const url = URL.createObjectURL(audioBlob);
 
       return url;
     } catch (err) {
@@ -148,7 +134,7 @@ export function useKokoroTTS(): UseKokoroTTSReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [initializeTTS]);
+  }, []);
 
   return {
     generateSpeech,
