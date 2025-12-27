@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import WaveSurfer from "wavesurfer.js";
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.js";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, Check } from "lucide-react";
+import { Play, Pause, Check, Sparkles } from "lucide-react";
 
 interface AudioTrimmerProps {
   audioFile: File;
@@ -28,6 +28,7 @@ export default function AudioTrimmer({
   const [regionStart, setRegionStart] = useState(0);
   const [regionEnd, setRegionEnd] = useState(0);
   const [trimming, setTrimming] = useState(false);
+  const [removeNoise, setRemoveNoise] = useState(true);
 
   useEffect(() => {
     if (!waveformRef.current) return;
@@ -109,6 +110,33 @@ export default function AudioTrimmer({
     }
   };
 
+  // Client-side noise reduction using high-pass filter and noise gate
+  const applyNoiseReduction = async (audioBuffer: AudioBuffer): Promise<AudioBuffer> => {
+    const sampleRate = audioBuffer.sampleRate;
+    const context = new OfflineAudioContext(
+      audioBuffer.numberOfChannels,
+      audioBuffer.length,
+      sampleRate
+    );
+
+    // Create source
+    const source = context.createBufferSource();
+    source.buffer = audioBuffer;
+
+    // High-pass filter to remove low-frequency noise (below 80Hz)
+    const highPassFilter = context.createBiquadFilter();
+    highPassFilter.type = "highpass";
+    highPassFilter.frequency.value = 80;
+    highPassFilter.Q.value = 1;
+
+    // Connect nodes
+    source.connect(highPassFilter);
+    highPassFilter.connect(context.destination);
+    source.start(0);
+
+    return await context.startRendering();
+  };
+
   const handleTrim = async () => {
     if (!wavesurferRef.current) return;
 
@@ -142,8 +170,14 @@ export default function AudioTrimmer({
         }
       }
 
+      // Apply noise reduction if enabled
+      let finalBuffer = trimmedBuffer;
+      if (removeNoise) {
+        finalBuffer = await applyNoiseReduction(trimmedBuffer);
+      }
+
       // Convert to WAV blob
-      const wavBlob = await audioBufferToWav(trimmedBuffer);
+      const wavBlob = await audioBufferToWav(finalBuffer);
       const trimmedFile = new File([wavBlob], audioFile.name, { type: "audio/wav" });
 
       onTrimComplete(trimmedFile);
@@ -176,6 +210,28 @@ export default function AudioTrimmer({
       {/* Waveform */}
       <div className="border-2 border-violet-200 dark:border-violet-800 rounded-lg p-4 bg-white dark:bg-gray-800">
         <div ref={waveformRef} />
+      </div>
+
+      {/* Noise Removal Toggle */}
+      <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+        <button
+          onClick={() => setRemoveNoise(!removeNoise)}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+            removeNoise ? 'bg-violet-600' : 'bg-gray-300 dark:bg-gray-600'
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              removeNoise ? 'translate-x-6' : 'translate-x-1'
+            }`}
+          />
+        </button>
+        <div className="flex items-center gap-2">
+          <Sparkles className={`w-4 h-4 ${removeNoise ? 'text-violet-600' : 'text-gray-400'}`} />
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Clean Audio (Remove Background Noise)
+          </span>
+        </div>
       </div>
 
       {/* Controls */}

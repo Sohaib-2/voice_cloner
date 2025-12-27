@@ -1,31 +1,37 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Upload, Mic, Wand2, Download, Play, Pause, Volume2, Loader2 } from "lucide-react";
-import AudioTrimmer from "@/components/AudioTrimmer";
+import { Upload, Wand2, Download, Play, Pause, Volume2, Loader2, Sparkles, Check } from "lucide-react";
+import WaveSurfer from "wavesurfer.js";
+import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.js";
 
 export default function Home() {
   const [text, setText] = useState("Hello, This is a test of your new AI voice cloning app.");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
-  const [refAudioSrc, setRefAudioSrc] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [removeNoise, setRemoveNoise] = useState(true);
+
+  // Waveform refs
+  const refWaveformRef = useRef<HTMLDivElement>(null);
+  const genWaveformRef = useRef<HTMLDivElement>(null);
+  const refWavesurferRef = useRef<WaveSurfer | null>(null);
+  const genWavesurferRef = useRef<WaveSurfer | null>(null);
+  const regionsPluginRef = useRef<RegionsPlugin | null>(null);
+
+  // Audio state
   const [isRefPlaying, setIsRefPlaying] = useState(false);
   const [isGenPlaying, setIsGenPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [showTrimmer, setShowTrimmer] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [audioDuration, setAudioDuration] = useState(0);
+  const [regionStart, setRegionStart] = useState(0);
+  const [regionEnd, setRegionEnd] = useState(0);
 
-  const refAudioRef = useRef<HTMLAudioElement>(null);
-  const genAudioRef = useRef<HTMLAudioElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const charCount = text.length;
   const maxChars = 50000;
-  const maxAudioDuration = 25; // seconds
+  const maxAudioDuration = 25;
 
   // Helper: Convert File to Base64
   const toBase64 = (file: File) => new Promise<string>((resolve, reject) => {
@@ -35,107 +41,229 @@ export default function Home() {
     reader.onerror = error => reject(error);
   });
 
-  // Check audio duration
-  const checkAudioDuration = (file: File): Promise<number> => {
-    return new Promise((resolve, reject) => {
-      const audio = new Audio();
-      const url = URL.createObjectURL(file);
+  // Client-side noise reduction
+  const applyNoiseReduction = async (audioBuffer: AudioBuffer): Promise<AudioBuffer> => {
+    const sampleRate = audioBuffer.sampleRate;
+    const context = new OfflineAudioContext(
+      audioBuffer.numberOfChannels,
+      audioBuffer.length,
+      sampleRate
+    );
 
-      audio.addEventListener("loadedmetadata", () => {
-        URL.revokeObjectURL(url);
-        resolve(audio.duration);
-      });
+    const source = context.createBufferSource();
+    source.buffer = audioBuffer;
 
-      audio.addEventListener("error", () => {
-        URL.revokeObjectURL(url);
-        reject(new Error("Failed to load audio"));
-      });
+    const highPassFilter = context.createBiquadFilter();
+    highPassFilter.type = "highpass";
+    highPassFilter.frequency.value = 80;
+    highPassFilter.Q.value = 1;
 
-      audio.src = url;
-    });
+    source.connect(highPassFilter);
+    highPassFilter.connect(context.destination);
+    source.start(0);
+
+    return await context.startRendering();
+  };
+
+  // Convert AudioBuffer to WAV blob
+  const audioBufferToWav = async (buffer: AudioBuffer): Promise<Blob> => {
+    const length = buffer.length * buffer.numberOfChannels * 2 + 44;
+    const arrayBuffer = new ArrayBuffer(length);
+    const view = new DataView(arrayBuffer);
+    const channels: Float32Array[] = [];
+    let offset = 0;
+    let pos = 0;
+
+    const setUint16 = (data: number) => {
+      view.setUint16(pos, data, true);
+      pos += 2;
+    };
+    const setUint32 = (data: number) => {
+      view.setUint32(pos, data, true);
+      pos += 4;
+    };
+
+    setUint32(0x46464952);
+    setUint32(length - 8);
+    setUint32(0x45564157);
+    setUint32(0x20746d66);
+    setUint32(16);
+    setUint16(1);
+    setUint16(buffer.numberOfChannels);
+    setUint32(buffer.sampleRate);
+    setUint32(buffer.sampleRate * buffer.numberOfChannels * 2);
+    setUint16(buffer.numberOfChannels * 2);
+    setUint16(16);
+    setUint32(0x61746164);
+    setUint32(length - pos - 4);
+
+    for (let i = 0; i < buffer.numberOfChannels; i++) {
+      channels.push(buffer.getChannelData(i));
+    }
+
+    while (pos < length) {
+      for (let i = 0; i < buffer.numberOfChannels; i++) {
+        let sample = Math.max(-1, Math.min(1, channels[i][offset]));
+        sample = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+        view.setInt16(pos, sample, true);
+        pos += 2;
+      }
+      offset++;
+    }
+
+    return new Blob([arrayBuffer], { type: "audio/wav" });
+  };
+
+  // Process audio file
+  const processAudioFile = async (audioFile: File) => {
+    const audioContext = new AudioContext();
+    const arrayBuffer = await audioFile.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+    const sampleRate = audioBuffer.sampleRate;
+    const startSample = Math.floor(regionStart * sampleRate);
+    const endSample = Math.floor(regionEnd * sampleRate);
+    const trimmedLength = endSample - startSample;
+
+    const trimmedBuffer = audioContext.createBuffer(
+      audioBuffer.numberOfChannels,
+      trimmedLength,
+      sampleRate
+    );
+
+    for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+      const channelData = audioBuffer.getChannelData(channel);
+      const trimmedData = trimmedBuffer.getChannelData(channel);
+      for (let i = 0; i < trimmedLength; i++) {
+        trimmedData[i] = channelData[startSample + i];
+      }
+    }
+
+    let finalBuffer = trimmedBuffer;
+    if (removeNoise) {
+      finalBuffer = await applyNoiseReduction(trimmedBuffer);
+    }
+
+    const wavBlob = await audioBufferToWav(finalBuffer);
+    return new File([wavBlob], audioFile.name, { type: "audio/wav" });
   };
 
   // Handle file upload
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      try {
-        const duration = await checkAudioDuration(selectedFile);
+    if (!selectedFile) return;
+
+    try {
+      // Clean up previous wavesurfer
+      if (refWavesurferRef.current) {
+        refWavesurferRef.current.destroy();
+        refWavesurferRef.current = null;
+      }
+
+      setFile(selectedFile);
+    } catch (error) {
+      alert("Failed to load audio file. Please try a different file.");
+      e.target.value = "";
+    }
+  };
+
+  // Initialize waveform after file is set and DOM is ready
+  useEffect(() => {
+    if (!file || !refWaveformRef.current) return;
+
+    // Clean up previous instance
+    if (refWavesurferRef.current) {
+      refWavesurferRef.current.destroy();
+    }
+
+    // Wait for next tick to ensure DOM is ready
+    const timer = setTimeout(() => {
+      if (!refWaveformRef.current) return;
+
+      const wavesurfer = WaveSurfer.create({
+        container: refWaveformRef.current,
+        waveColor: "#a78bfa",
+        progressColor: "#7c3aed",
+        cursorColor: "#7c3aed",
+        barWidth: 2,
+        barGap: 1,
+        height: 120,
+        normalize: true,
+        backend: "WebAudio",
+      });
+
+      const regions = wavesurfer.registerPlugin(RegionsPlugin.create());
+      regionsPluginRef.current = regions;
+
+      const url = URL.createObjectURL(file);
+      wavesurfer.load(url);
+
+      wavesurfer.on("ready", () => {
+        const duration = wavesurfer.getDuration();
         setAudioDuration(duration);
 
-        // Always show trimmer for all audio files
-        setUploadedFile(selectedFile);
-        setShowTrimmer(true);
-      } catch (error) {
-        alert("Failed to load audio file. Please try a different file.");
-        e.target.value = "";
-      }
-    }
-  };
+        const regionDuration = Math.min(duration, maxAudioDuration);
+        regions.addRegion({
+          start: 0,
+          end: regionDuration,
+          color: "rgba(124, 58, 237, 0.3)",
+          drag: true,
+          resize: true,
+        });
 
-  // Handle trimmed audio
-  const handleTrimComplete = (trimmedFile: File) => {
-    setFile(trimmedFile);
-    const url = URL.createObjectURL(trimmedFile);
-    setRefAudioSrc(url);
-    setShowTrimmer(false);
-    setUploadedFile(null);
-  };
+        setRegionStart(0);
+        setRegionEnd(regionDuration);
+      });
 
-  // Cancel trimming
-  const handleTrimCancel = () => {
-    setShowTrimmer(false);
-    setUploadedFile(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
+      regions.on("region-updated", (region) => {
+        let start = region.start;
+        let end = region.end;
 
-  // Toggle reference audio playback
+        if (end - start > maxAudioDuration) {
+          end = start + maxAudioDuration;
+          region.setOptions({ end });
+        }
+
+        setRegionStart(start);
+        setRegionEnd(end);
+      });
+
+      wavesurfer.on("play", () => setIsRefPlaying(true));
+      wavesurfer.on("pause", () => setIsRefPlaying(false));
+      wavesurfer.on("finish", () => setIsRefPlaying(false));
+
+      refWavesurferRef.current = wavesurfer;
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [file, maxAudioDuration]);
+
   const toggleRefAudio = () => {
-    if (refAudioRef.current) {
-      if (isRefPlaying) {
-        refAudioRef.current.pause();
+    if (!refWavesurferRef.current) return;
+
+    if (isRefPlaying) {
+      refWavesurferRef.current.pause();
+    } else {
+      // Play only the selected region
+      const regions = regionsPluginRef.current?.getRegions();
+      if (regions && regions.length > 0) {
+        const region = regions[0];
+        region.play();
       } else {
-        refAudioRef.current.play();
+        // Fallback if no region exists
+        refWavesurferRef.current.setTime(regionStart);
+        refWavesurferRef.current.play();
       }
-      setIsRefPlaying(!isRefPlaying);
     }
   };
 
-  // Toggle generated audio playback
   const toggleGenAudio = () => {
-    if (genAudioRef.current) {
-      if (isGenPlaying) {
-        genAudioRef.current.pause();
-      } else {
-        genAudioRef.current.play();
-      }
-      setIsGenPlaying(!isGenPlaying);
+    if (genWavesurferRef.current) {
+      genWavesurferRef.current.playPause();
     }
   };
 
-  // Handle audio end events
-  useEffect(() => {
-    const refAudio = refAudioRef.current;
-    const genAudio = genAudioRef.current;
-
-    const handleRefEnded = () => setIsRefPlaying(false);
-    const handleGenEnded = () => setIsGenPlaying(false);
-
-    if (refAudio) {
-      refAudio.addEventListener('ended', handleRefEnded);
-    }
-    if (genAudio) {
-      genAudio.addEventListener('ended', handleGenEnded);
-    }
-
-    return () => {
-      if (refAudio) refAudio.removeEventListener('ended', handleRefEnded);
-      if (genAudio) genAudio.removeEventListener('ended', handleGenEnded);
-    };
-  }, []);
-
+  // Poll job status
   const pollJobStatus = async (jobId: string): Promise<{ audio: string; duration: number }> => {
     return new Promise((resolve, reject) => {
       const pollInterval = setInterval(async () => {
@@ -155,17 +283,17 @@ export default function Home() {
             clearInterval(pollInterval);
             reject(new Error(statusData.error || "Job failed"));
           } else {
-            // Still in queue or processing - update progress
             setProgress(prev => Math.min(prev + 5, 90));
           }
         } catch (err) {
           clearInterval(pollInterval);
           reject(err);
         }
-      }, 2000); // Poll every 2 seconds
+      }, 2000);
     });
   };
 
+  // Generate audio
   const handleGenerate = async () => {
     if (!file || !text) {
       alert("Please upload a voice sample and enter text.");
@@ -181,10 +309,11 @@ export default function Home() {
     setAudioSrc(null);
     setProgress(0);
 
-    let progressInterval: NodeJS.Timeout | null = null;
-
     try {
-      const fullBase64 = await toBase64(file);
+      // Process audio (trim + noise reduction)
+      const processedFile = await processAudioFile(file);
+
+      const fullBase64 = await toBase64(processedFile);
       const base64Data = fullBase64.split(",")[1];
 
       setProgress(10);
@@ -203,29 +332,13 @@ export default function Home() {
 
       if (!res.ok) throw new Error(data.error || "Failed to generate");
 
-      // Check if response is async (has jobId) or sync (has audio)
       if (data.jobId) {
-        // Async mode - poll for status
         setProgress(20);
         const result = await pollJobStatus(data.jobId);
         setProgress(100);
         const audioUrl = `data:audio/mp3;base64,${result.audio}`;
         setAudioSrc(audioUrl);
       } else if (data.audio) {
-        // Sync mode - simulate quick progress
-        progressInterval = setInterval(() => {
-          setProgress(prev => {
-            if (prev >= 90) {
-              clearInterval(progressInterval!);
-              return 90;
-            }
-            return prev + 15;
-          });
-        }, 200);
-
-        await new Promise(resolve => setTimeout(resolve, 500));
-        if (progressInterval) clearInterval(progressInterval);
-
         setProgress(100);
         const audioUrl = `data:audio/mp3;base64,${data.audio}`;
         setAudioSrc(audioUrl);
@@ -236,261 +349,299 @@ export default function Home() {
     } catch (err: any) {
       alert("Error: " + err.message);
     } finally {
-      if (progressInterval) clearInterval(progressInterval);
       setLoading(false);
       setProgress(0);
     }
   };
 
+  // Load generated audio into waveform
+  useEffect(() => {
+    if (audioSrc && genWaveformRef.current) {
+      if (genWavesurferRef.current) {
+        genWavesurferRef.current.destroy();
+      }
+
+      const wavesurfer = WaveSurfer.create({
+        container: genWaveformRef.current,
+        waveColor: "#10b981",
+        progressColor: "#059669",
+        cursorColor: "#059669",
+        barWidth: 2,
+        barGap: 1,
+        height: 120,
+        normalize: true,
+      });
+
+      wavesurfer.load(audioSrc);
+
+      wavesurfer.on("play", () => setIsGenPlaying(true));
+      wavesurfer.on("pause", () => setIsGenPlaying(false));
+      wavesurfer.on("finish", () => setIsGenPlaying(false));
+
+      genWavesurferRef.current = wavesurfer;
+    }
+  }, [audioSrc]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (refWavesurferRef.current) {
+        refWavesurferRef.current.destroy();
+      }
+      if (genWavesurferRef.current) {
+        genWavesurferRef.current.destroy();
+      }
+    };
+  }, []);
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900 p-4 sm:p-6 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-6 py-8">
+    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950 text-white">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header */}
-        <div className="text-center space-y-3 mb-8">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-violet-100 dark:bg-violet-900/30 rounded-full text-violet-700 dark:text-violet-300 text-sm font-medium mb-4">
-            <Mic className="w-4 h-4" />
-            AI Powered
+        <div className="text-center mb-16">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-violet-500/20 border border-violet-500/30 rounded-full text-violet-300 text-sm font-medium mb-6 backdrop-blur-sm">
+            <Sparkles className="w-4 h-4" />
+            AI Powered Voice Cloning
           </div>
-          <h1 className="text-4xl sm:text-5xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">
-            AI Voice Cloner
+          <h1 className="text-5xl sm:text-6xl font-bold mb-4 bg-gradient-to-r from-violet-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">
+            Voice Studio
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 text-lg max-w-2xl mx-auto">
-            Upload a voice sample and watch AI clone it to speak your text with incredible realism
+          <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+            Transform any text into speech using AI-cloned voices with studio-quality results
           </p>
         </div>
 
-        {/* Audio Trimmer Modal */}
-        {showTrimmer && uploadedFile && (
-          <Card className="border-2 border-violet-300 dark:border-violet-700 shadow-xl">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-violet-700 dark:text-violet-300">
-                <Upload className="w-5 h-5" />
-                Select Audio Section
-              </CardTitle>
-              <CardDescription>
-                Drag the blue region on the waveform to select the best part of your audio (max 25 seconds)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <AudioTrimmer
-                audioFile={uploadedFile}
-                onTrimComplete={handleTrimComplete}
-                onCancel={handleTrimCancel}
-                maxDuration={maxAudioDuration}
-              />
-            </CardContent>
-          </Card>
-        )}
+        {/* Main Studio Area */}
+        <div className="space-y-8">
+          {/* Reference Voice Section */}
+          <div className="relative">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                  <Volume2 className="w-5 h-5 text-violet-400" />
+                  Reference Voice
+                </h2>
+                <p className="text-sm text-gray-400 mt-1">
+                  Upload and trim your voice sample (max {maxAudioDuration}s)
+                </p>
+              </div>
 
-        {/* Main Content */}
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Reference Voice Upload */}
-          <Card className="border-2 hover:border-violet-200 dark:hover:border-violet-800 transition-all duration-300">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Upload className="w-5 h-5 text-violet-600" />
-                Reference Voice
-              </CardTitle>
-              <CardDescription>
-                Upload a clear audio sample (max 25 seconds) of the voice you want to clone
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="audio/*"
-                onChange={handleFileChange}
-                className="hidden"
-              />
+              {file && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setRemoveNoise(!removeNoise)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      removeNoise ? 'bg-violet-600' : 'bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        removeNoise ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                  <Sparkles className={`w-4 h-4 ${removeNoise ? 'text-violet-400' : 'text-gray-500'}`} />
+                  <span className="text-sm text-gray-300">Clean Audio</span>
+                </div>
+              )}
+            </div>
 
-              {!file ? (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full h-40 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg hover:border-violet-400 dark:hover:border-violet-600 transition-all duration-300 flex flex-col items-center justify-center gap-3 bg-white/50 dark:bg-gray-800/50 hover:bg-violet-50 dark:hover:bg-violet-900/10"
-                >
-                  <div className="w-16 h-16 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
-                    <Upload className="w-8 h-8 text-violet-600" />
-                  </div>
-                  <div className="text-center">
-                    <p className="font-medium text-gray-700 dark:text-gray-300">Click to upload</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">WAV, MP3, or any audio format</p>
-                  </div>
-                </button>
-              ) : (
-                <div className="space-y-3">
-                  <div className="p-4 bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 rounded-lg border border-violet-200 dark:border-violet-800">
-                    <div className="flex items-center gap-3 mb-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="audio/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+
+            {!file ? (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full h-48 border-2 border-dashed border-violet-500/30 rounded-2xl hover:border-violet-500/60 transition-all duration-300 flex flex-col items-center justify-center gap-4 bg-violet-500/5 hover:bg-violet-500/10 backdrop-blur-sm group"
+              >
+                <div className="w-20 h-20 rounded-full bg-violet-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Upload className="w-10 h-10 text-violet-400" />
+                </div>
+                <div className="text-center">
+                  <p className="font-medium text-white text-lg">Drop your audio file here</p>
+                  <p className="text-sm text-gray-400 mt-1">or click to browse • WAV, MP3, or any audio format</p>
+                </div>
+              </button>
+            ) : (
+              <div className="space-y-4 animate-fadeIn">
+                <div className="bg-gradient-to-br from-violet-500/10 to-purple-500/10 border border-violet-500/20 rounded-2xl p-6 backdrop-blur-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-violet-600 flex items-center justify-center">
-                        <Volume2 className="w-5 h-5 text-white" />
+                        <Check className="w-5 h-5 text-white" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{file.name}</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {(file.size / 1024).toFixed(1)} KB
+                      <div>
+                        <p className="font-medium text-white">{file.name}</p>
+                        <p className="text-sm text-gray-400">
+                          {audioDuration > 0 && `${audioDuration.toFixed(1)}s • `}
+                          {audioDuration > maxAudioDuration ? (
+                            <span className="text-amber-400">Select {maxAudioDuration}s section below</span>
+                          ) : (
+                            <span className="text-green-400">Perfect length</span>
+                          )}
                         </p>
                       </div>
                     </div>
-
-                    {refAudioSrc && (
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={toggleRefAudio}
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                        >
-                          {isRefPlaying ? (
-                            <><Pause className="w-4 h-4 mr-2" /> Pause</>
-                          ) : (
-                            <><Play className="w-4 h-4 mr-2" /> Preview</>
-                          )}
-                        </Button>
-                        <Button
-                          onClick={() => {
-                            setFile(null);
-                            setRefAudioSrc(null);
-                            setIsRefPlaying(false);
-                          }}
-                          variant="outline"
-                          size="sm"
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    )}
+                    <Button
+                      onClick={() => {
+                        setFile(null);
+                        setIsRefPlaying(false);
+                        if (refWavesurferRef.current) refWavesurferRef.current.destroy();
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className="bg-white/5 border-white/10 hover:bg-white/10"
+                    >
+                      Change
+                    </Button>
                   </div>
-                  <audio ref={refAudioRef} src={refAudioSrc || undefined} className="hidden" />
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
-          {/* Text Input */}
-          <Card className="border-2 hover:border-violet-200 dark:hover:border-violet-800 transition-all duration-300">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Wand2 className="w-5 h-5 text-violet-600" />
-                Text to Speak
-              </CardTitle>
-              <CardDescription>
-                Enter the text you want the cloned voice to say
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  rows={8}
-                  maxLength={maxChars}
-                  placeholder="Type your message here..."
-                  className="w-full p-4 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all resize-none"
-                />
-                <div className="flex justify-between items-center text-sm">
-                  <span className={`${charCount > maxChars ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {charCount} / {maxChars} characters
-                  </span>
-                  {charCount > maxChars && (
-                    <span className="text-red-500 font-medium">Text too long!</span>
-                  )}
+                  {/* Waveform */}
+                  <div className="bg-black/20 rounded-xl p-4 mb-4">
+                    <div ref={refWaveformRef} />
+                  </div>
+
+                  {/* Controls */}
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-gray-300">
+                      Selected: <span className="font-mono text-violet-300">{regionStart.toFixed(2)}s - {regionEnd.toFixed(2)}s</span>
+                      <span className="ml-2 text-gray-400">
+                        ({(regionEnd - regionStart).toFixed(2)}s / {maxAudioDuration}s)
+                      </span>
+                    </div>
+                    <Button
+                      onClick={toggleRefAudio}
+                      size="sm"
+                      className="bg-violet-600 hover:bg-violet-700"
+                    >
+                      {isRefPlaying ? (
+                        <><Pause className="w-4 h-4 mr-2" /> Pause</>
+                      ) : (
+                        <><Play className="w-4 h-4 mr-2" /> Preview</>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Generate Button */}
-        <div className="flex justify-center">
-          <Button
-            onClick={handleGenerate}
-            disabled={loading || !file || !text || charCount > maxChars}
-            size="lg"
-            className="px-8 py-6 text-lg font-semibold bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transition-all duration-300"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                Generating Voice... {progress}%
-              </>
-            ) : (
-              <>
-                <Wand2 className="w-5 h-5 mr-2" />
-                Generate Voice Clone
-              </>
             )}
-          </Button>
-        </div>
+          </div>
 
-        {/* Loading Progress */}
-        {loading && (
-          <Card className="border-violet-200 dark:border-violet-800 bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20">
-            <CardContent className="pt-6">
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm font-medium text-violet-700 dark:text-violet-300">
-                  <span>Processing your voice clone...</span>
-                  <span>{progress}%</span>
-                </div>
-                <div className="w-full bg-violet-200 dark:bg-violet-900/30 rounded-full h-2 overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-violet-600 to-purple-600 transition-all duration-300 ease-out"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
+          {/* Text Input Section */}
+          <div className="relative">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-white">Text to Speak</h2>
+                <p className="text-sm text-gray-400 mt-1">
+                  Enter the text you want the AI to speak in the cloned voice
+                </p>
               </div>
-            </CardContent>
-          </Card>
-        )}
+              <div className="text-sm">
+                <span className={`font-mono ${charCount > maxChars ? 'text-red-400' : 'text-violet-300'}`}>
+                  {charCount.toLocaleString()}
+                </span>
+                <span className="text-gray-500"> / {maxChars.toLocaleString()}</span>
+              </div>
+            </div>
 
-        {/* Generated Audio Player */}
-        {audioSrc && !loading && (
-          <Card className="border-2 border-green-200 dark:border-green-800 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 animate-fadeIn">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center animate-pulse">
-                  <span className="text-white text-lg">✓</span>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="w-full h-40 bg-gradient-to-br from-violet-500/10 to-purple-500/10 border border-violet-500/20 rounded-2xl p-6 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 resize-none backdrop-blur-sm"
+              placeholder="Type or paste your text here..."
+            />
+          </div>
+
+          {/* Generate Button */}
+          <div className="flex justify-center">
+            <Button
+              onClick={handleGenerate}
+              disabled={loading || !file || !text || charCount > maxChars}
+              className="h-14 px-12 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-lg font-semibold rounded-xl shadow-lg shadow-violet-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {loading ? (
+                <><Loader2 className="w-5 h-5 mr-3 animate-spin" /> Generating...</>
+              ) : (
+                <><Wand2 className="w-5 h-5 mr-3" /> Generate Voice</>
+              )}
+            </Button>
+          </div>
+
+          {/* Progress Bar */}
+          {loading && progress > 0 && (
+            <div className="space-y-2 animate-fadeIn">
+              <div className="h-2 bg-black/20 rounded-full overflow-hidden backdrop-blur-sm">
+                <div
+                  className="h-full bg-gradient-to-r from-violet-500 to-purple-500 transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <p className="text-center text-sm text-gray-400">
+                {progress < 20 ? "Processing audio..." : progress < 90 ? "Generating voice..." : "Almost done..."}
+              </p>
+            </div>
+          )}
+
+          {/* Generated Audio Section */}
+          {audioSrc && (
+            <div className="relative animate-fadeIn">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-green-400" />
+                    Generated Voice
+                  </h2>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Your AI-generated voice is ready
+                  </p>
                 </div>
-                Voice Clone Ready!
-              </CardTitle>
-              <CardDescription className="text-green-600 dark:text-green-400">
-                Your AI-generated voice is ready to play
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="p-6 bg-white dark:bg-gray-800 rounded-lg border-2 border-green-200 dark:border-green-800">
-                <audio ref={genAudioRef} src={audioSrc} className="hidden" />
+                <Button
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = audioSrc;
+                    link.download = 'generated-voice.mp3';
+                    link.click();
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="bg-green-500/10 border-green-500/20 hover:bg-green-500/20 text-green-300"
+                >
+                  <Download className="w-4 h-4 mr-2" /> Download
+                </Button>
+              </div>
 
-                <div className="flex items-center gap-4">
+              <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl p-6 backdrop-blur-sm">
+                {/* Waveform */}
+                <div className="bg-black/20 rounded-xl p-4 mb-4">
+                  <div ref={genWaveformRef} />
+                </div>
+
+                {/* Controls */}
+                <div className="flex justify-center">
                   <Button
                     onClick={toggleGenAudio}
                     size="lg"
-                    className="bg-green-600 hover:bg-green-700 text-white"
+                    className="bg-green-600 hover:bg-green-700"
                   >
                     {isGenPlaying ? (
                       <><Pause className="w-5 h-5 mr-2" /> Pause</>
                     ) : (
-                      <><Play className="w-5 h-5 mr-2" /> Play Audio</>
+                      <><Play className="w-5 h-5 mr-2" /> Play Generated Voice</>
                     )}
                   </Button>
-
-                  <a
-                    href={audioSrc}
-                    download="ai-voice-clone.mp3"
-                    className="flex-1"
-                  >
-                    <Button variant="outline" size="lg" className="w-full border-green-300 dark:border-green-700 hover:bg-green-50 dark:hover:bg-green-900/20">
-                      <Download className="w-5 h-5 mr-2" />
-                      Download MP3
-                    </Button>
-                  </a>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          )}
+        </div>
 
-        {/* Footer Info */}
-        <div className="text-center text-sm text-gray-500 dark:text-gray-400 pt-6">
+        {/* Footer */}
+        <div className="text-center text-sm text-gray-500 mt-16">
           <p>Advanced AI Voice Cloning Technology</p>
         </div>
       </div>
