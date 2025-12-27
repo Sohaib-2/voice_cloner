@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+const TEXT_LENGTH_THRESHOLD = 500; // Characters threshold for sync vs async
+
 const VOICE_INFO: Record<string, { gender: string; description: string }> = {
   // 🇺🇸 US English - Female
   "af_heart": { gender: "Female", description: "Warm and expressive with heartfelt delivery" },
@@ -84,9 +86,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing text" }, { status: 400 });
     }
 
+    // Decide between sync and async based on text length
+    const useAsync = text.length >= TEXT_LENGTH_THRESHOLD;
+    const endpoint = useAsync ? "run" : "runsync";
+
     // Call RunPod Serverless for AI Voice Generation
     const runpodResponse = await fetch(
-      `https://api.runpod.ai/v2/${process.env.KOKORO_ENDPOINT_ID}/runsync`,
+      `https://api.runpod.ai/v2/${process.env.KOKORO_ENDPOINT_ID}/${endpoint}`,
       {
         method: "POST",
         headers: {
@@ -106,23 +112,38 @@ export async function POST(request: Request) {
 
     const data = await runpodResponse.json();
 
-    if (data.status !== "COMPLETED") {
-      console.error("RunPod AI Voice Error:", data);
-      return NextResponse.json({ error: "Generation failed", details: data }, { status: 500 });
+    // Handle Response based on endpoint type
+    if (useAsync) {
+      // Async endpoint returns job ID immediately
+      if (data.id) {
+        return NextResponse.json({
+          jobId: data.id,
+          status: "IN_QUEUE"
+        });
+      } else {
+        console.error("RunPod Async Error:", data);
+        return NextResponse.json({ error: "Failed to queue job", details: data }, { status: 500 });
+      }
+    } else {
+      // Sync endpoint returns result directly
+      if (data.status !== "COMPLETED") {
+        console.error("RunPod Sync Error:", data);
+        return NextResponse.json({ error: "Generation failed", details: data }, { status: 500 });
+      }
+
+      const voiceId = data.output.voice;
+      const voiceMetadata = VOICE_INFO[voiceId] || { gender: "Unknown", description: "No description available" };
+
+      return NextResponse.json({
+        audio: data.output.audio, // Base64 audio
+        format: data.output.format,
+        voice: data.output.voice,
+        voiceGender: voiceMetadata.gender,
+        voiceDescription: voiceMetadata.description,
+        duration: data.output.duration,
+        processing_time: data.output.processing_time
+      });
     }
-
-    const voiceId = data.output.voice;
-    const voiceMetadata = VOICE_INFO[voiceId] || { gender: "Unknown", description: "No description available" };
-
-    return NextResponse.json({
-      audio: data.output.audio, // Base64 audio
-      format: data.output.format,
-      voice: data.output.voice,
-      voiceGender: voiceMetadata.gender,
-      voiceDescription: voiceMetadata.description,
-      duration: data.output.duration,
-      processing_time: data.output.processing_time
-    });
 
   } catch (error) {
     console.error(error);

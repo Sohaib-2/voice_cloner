@@ -400,8 +400,19 @@ export default function Home() {
 
       if (!res.ok) throw new Error(data.error || "Failed to generate");
 
-      const audioUrl = `data:audio/mp3;base64,${data.audio}`;
-      setTtsAudioSrc(audioUrl);
+      // Check if response has jobId (async) or audio (sync)
+      if (data.jobId) {
+        // Async response - poll for status
+        const result = await pollJobStatus(data.jobId);
+        const audioUrl = `data:audio/mp3;base64,${result.audio}`;
+        setTtsAudioSrc(audioUrl);
+      } else if (data.audio) {
+        // Sync response - use audio directly
+        const audioUrl = `data:audio/mp3;base64,${data.audio}`;
+        setTtsAudioSrc(audioUrl);
+      } else {
+        throw new Error("Invalid response from server");
+      }
 
     } catch (err: any) {
       alert("Error: " + err.message);
@@ -755,143 +766,24 @@ export default function Home() {
         {/* AI Voices Tab */}
         {activeTab === "tts" && (
           <div className="space-y-8 animate-fadeIn">
-            {/* Voice Selector */}
-            <div className="relative">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-xl font-semibold flex items-center gap-2">
-                    <Mic className="w-5 h-5 text-primary" />
-                    Select AI Voice
-                  </h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Choose from 60+ premium voices in 8 languages
-                  </p>
+            {/* Coming Soon Message */}
+            <div className="flex items-center justify-center min-h-[500px]">
+              <div className="text-center max-w-md mx-auto">
+                <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Sparkles className="w-12 h-12 text-primary" />
                 </div>
-              </div>
-
-              <VoiceSelector
-                selectedVoice={ttsVoice}
-                onVoiceChange={setTtsVoice}
-              />
-            </div>
-
-            {/* Speed Control */}
-            <div className="relative">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-xl font-semibold">Speed</h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Adjust the speaking speed
-                  </p>
+                <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-primary via-purple-500 to-pink-500 bg-clip-text text-transparent">
+                  AI Voices Coming Soon
+                </h2>
+                <p className="text-muted-foreground text-lg mb-6">
+                  We're currently working on bringing you 60+ premium AI voices in 8 languages. This feature will be available very soon!
+                </p>
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/20 rounded-full text-primary text-sm font-medium">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Under Development
                 </div>
-                <span className="text-sm font-mono text-primary">{ttsSpeed.toFixed(1)}x</span>
-              </div>
-
-              <input
-                type="range"
-                min="0.5"
-                max="2.0"
-                step="0.1"
-                value={ttsSpeed}
-                onChange={(e) => setTtsSpeed(parseFloat(e.target.value))}
-                className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground mt-2">
-                <span>0.5x (Slow)</span>
-                <span>1.0x (Normal)</span>
-                <span>2.0x (Fast)</span>
               </div>
             </div>
-
-            {/* Text Input */}
-            <div className="relative">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-xl font-semibold">Text to Speak</h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Enter the text you want to convert to speech
-                  </p>
-                </div>
-                <div className="text-sm">
-                  <span className={`font-mono ${charCount > maxChars ? 'text-destructive' : 'text-primary'}`}>
-                    {charCount.toLocaleString()}
-                  </span>
-                  <span className="text-muted-foreground"> / {maxChars.toLocaleString()}</span>
-                </div>
-              </div>
-
-              <textarea
-                value={ttsText}
-                onChange={(e) => setTtsText(e.target.value)}
-                className="w-full h-40 bg-card border border-border rounded-2xl p-6 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                placeholder="Type or paste your text here..."
-              />
-            </div>
-
-            {/* Generate Button */}
-            <div className="flex justify-center">
-              <Button
-                onClick={handleTtsGenerate}
-                disabled={ttsLoading || !ttsText || charCount > maxChars}
-                className="h-14 px-12 text-lg font-semibold rounded-xl shadow-lg"
-                size="lg"
-              >
-                {ttsLoading ? (
-                  <><Loader2 className="w-5 h-5 mr-3 animate-spin" /> Generating...</>
-                ) : (
-                  <><Sparkles className="w-5 h-5 mr-3" /> Generate Speech</>
-                )}
-              </Button>
-            </div>
-
-            {/* Generated Audio Section */}
-            {ttsAudioSrc && (
-              <div className="relative animate-fadeIn">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="text-xl font-semibold flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-green-500" />
-                      Generated Speech
-                    </h2>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Your AI-generated speech is ready
-                    </p>
-                  </div>
-                  <Button
-                    onClick={() => {
-                      const link = document.createElement('a');
-                      link.href = ttsAudioSrc;
-                      link.download = `voice-${ttsVoice.toLowerCase().replace(/\s+/g, '-')}.mp3`;
-                      link.click();
-                    }}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <Download className="w-4 h-4 mr-2" /> Download
-                  </Button>
-                </div>
-
-                <div className="bg-card border border-green-500/20 rounded-2xl p-6">
-                  <div className="bg-muted/50 rounded-xl p-4 mb-4">
-                    <div ref={ttsWaveformRef} />
-                  </div>
-
-                  <div className="flex justify-center">
-                    <Button
-                      onClick={toggleTtsAudio}
-                      size="lg"
-                      className="bg-green-600 hover:bg-green-700 text-white"
-                    >
-                      {isTtsPlaying ? (
-                        <><Pause className="w-5 h-5 mr-2" /> Pause</>
-                      ) : (
-                        <><Play className="w-5 h-5 mr-2" /> Play Generated Speech</>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
