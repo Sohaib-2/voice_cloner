@@ -9,7 +9,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing text" }, { status: 400 });
     }
 
-    // Call RunPod Serverless for Kokoro TTS
+    // Call RunPod Serverless for AI Voice Generation
     const runpodResponse = await fetch(
       `https://api.runpod.ai/v2/${process.env.KOKORO_ENDPOINT_ID}/runsync`,
       {
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const data = await runpodResponse.json();
 
     if (data.status !== "COMPLETED") {
-      console.error("RunPod Kokoro Error:", data);
+      console.error("RunPod AI Voice Error:", data);
       return NextResponse.json({ error: "Generation failed", details: data }, { status: 500 });
     }
 

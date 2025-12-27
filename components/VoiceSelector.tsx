@@ -107,12 +107,7 @@ export default function VoiceSelector({ selectedVoice, onVoiceChange }: VoiceSel
         variant="outline"
         className="w-full justify-between h-12 text-left font-normal bg-card hover:bg-accent"
       >
-        <span className="flex items-center gap-2">
-          <span className="font-semibold text-primary">{selectedVoice}</span>
-          <span className="text-xs text-muted-foreground">
-            ({VOICE_MAP[selectedVoice as keyof typeof VOICE_MAP]})
-          </span>
-        </span>
+        <span className="font-semibold text-primary">{selectedVoice}</span>
         <ChevronDown className="h-4 w-4 opacity-50" />
       </Button>
 
@@ -151,12 +146,7 @@ export default function VoiceSelector({ selectedVoice, onVoiceChange }: VoiceSel
                         }}
                         className="w-full px-4 py-2.5 text-left hover:bg-accent transition-colors flex items-center justify-between group"
                       >
-                        <div className="flex flex-col">
-                          <span className="font-medium text-foreground">{voice}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {VOICE_MAP[voice as keyof typeof VOICE_MAP]}
-                          </span>
-                        </div>
+                        <span className="font-medium text-foreground">{voice}</span>
                         {selectedVoice === voice && (
                           <Check className="h-4 w-4 text-primary" />
                         )}

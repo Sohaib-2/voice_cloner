@@ -521,7 +521,7 @@ export default function Home() {
             >
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4" />
-                Kokoro TTS
+                AI Voices
               </div>
             </button>
           </div>
@@ -752,7 +752,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* Kokoro TTS Tab */}
+        {/* AI Voices Tab */}
         {activeTab === "kokoro" && (
           <div className="space-y-8 animate-fadeIn">
             {/* Voice Selector */}
@@ -761,10 +761,10 @@ export default function Home() {
                 <div>
                   <h2 className="text-xl font-semibold flex items-center gap-2">
                     <Mic className="w-5 h-5 text-primary" />
-                    Select Voice
+                    Select AI Voice
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Choose from 60+ voices in 8 languages
+                    Choose from 60+ premium voices in 8 languages
                   </p>
                 </div>
               </div>
@@ -861,7 +861,7 @@ export default function Home() {
                     onClick={() => {
                       const link = document.createElement('a');
                       link.href = kokoroAudioSrc;
-                      link.download = `kokoro-${kokoroVoice.toLowerCase().replace(/\s+/g, '-')}.mp3`;
+                      link.download = `voice-${kokoroVoice.toLowerCase().replace(/\s+/g, '-')}.mp3`;
                       link.click();
                     }}
                     variant="outline"
