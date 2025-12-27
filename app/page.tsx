@@ -8,7 +8,7 @@ import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.js";
 import VoiceSelector from "@/components/VoiceSelector";
 import { ThemeToggle } from "@/components/theme-provider";
 
-type Tab = "clone" | "kokoro";
+type Tab = "clone" | "tts";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("clone");
@@ -21,32 +21,32 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
   const [removeNoise, setRemoveNoise] = useState(true);
 
-  // Kokoro TTS State
-  const [kokoroText, setKokoroText] = useState("Hello! This is Infinity TTS. Try different voices in multiple languages!");
-  const [kokoroVoice, setKokoroVoice] = useState("Jessica");
-  const [kokoroSpeed, setKokoroSpeed] = useState(1.0);
-  const [kokoroLoading, setKokoroLoading] = useState(false);
-  const [kokoroAudioSrc, setKokoroAudioSrc] = useState<string | null>(null);
+  // AI TTS State
+  const [ttsText, setTtsText] = useState("Hello! This is Infinity TTS. Try different voices in multiple languages!");
+  const [ttsVoice, setTtsVoice] = useState("Jessica");
+  const [ttsSpeed, setTtsSpeed] = useState(1.0);
+  const [ttsLoading, setTtsLoading] = useState(false);
+  const [ttsAudioSrc, setTtsAudioSrc] = useState<string | null>(null);
 
   // Waveform refs
   const refWaveformRef = useRef<HTMLDivElement>(null);
   const genWaveformRef = useRef<HTMLDivElement>(null);
-  const kokoroWaveformRef = useRef<HTMLDivElement>(null);
+  const ttsWaveformRef = useRef<HTMLDivElement>(null);
   const refWavesurferRef = useRef<WaveSurfer | null>(null);
   const genWavesurferRef = useRef<WaveSurfer | null>(null);
-  const kokoroWavesurferRef = useRef<WaveSurfer | null>(null);
+  const ttsWavesurferRef = useRef<WaveSurfer | null>(null);
   const regionsPluginRef = useRef<RegionsPlugin | null>(null);
 
   // Audio state
   const [isRefPlaying, setIsRefPlaying] = useState(false);
   const [isGenPlaying, setIsGenPlaying] = useState(false);
-  const [isKokoroPlaying, setIsKokoroPlaying] = useState(false);
+  const [isTtsPlaying, setIsTtsPlaying] = useState(false);
   const [audioDuration, setAudioDuration] = useState(0);
   const [regionStart, setRegionStart] = useState(0);
   const [regionEnd, setRegionEnd] = useState(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const charCount = activeTab === "clone" ? text.length : kokoroText.length;
+  const charCount = activeTab === "clone" ? text.length : ttsText.length;
   const maxChars = 50000;
   const maxAudioDuration = 25;
 
@@ -274,9 +274,9 @@ export default function Home() {
     }
   };
 
-  const toggleKokoroAudio = () => {
-    if (kokoroWavesurferRef.current) {
-      kokoroWavesurferRef.current.playPause();
+  const toggleTtsAudio = () => {
+    if (ttsWavesurferRef.current) {
+      ttsWavesurferRef.current.playPause();
     }
   };
 
@@ -369,29 +369,29 @@ export default function Home() {
     }
   };
 
-  // Generate audio with Kokoro TTS
-  const handleKokoroGenerate = async () => {
-    if (!kokoroText) {
+  // Generate audio with AI TTS
+  const handleTtsGenerate = async () => {
+    if (!ttsText) {
       alert("Please enter text to generate.");
       return;
     }
 
-    if (kokoroText.length > maxChars) {
+    if (ttsText.length > maxChars) {
       alert(`Text is too long. Maximum ${maxChars} characters allowed.`);
       return;
     }
 
-    setKokoroLoading(true);
-    setKokoroAudioSrc(null);
+    setTtsLoading(true);
+    setTtsAudioSrc(null);
 
     try {
-      const res = await fetch("/api/kokoro", {
+      const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text: kokoroText,
-          voice: kokoroVoice,
-          speed: kokoroSpeed,
+          text: ttsText,
+          voice: ttsVoice,
+          speed: ttsSpeed,
           output_format: "mp3"
         }),
       });
@@ -401,12 +401,12 @@ export default function Home() {
       if (!res.ok) throw new Error(data.error || "Failed to generate");
 
       const audioUrl = `data:audio/mp3;base64,${data.audio}`;
-      setKokoroAudioSrc(audioUrl);
+      setTtsAudioSrc(audioUrl);
 
     } catch (err: any) {
       alert("Error: " + err.message);
     } finally {
-      setKokoroLoading(false);
+      setTtsLoading(false);
     }
   };
 
@@ -438,15 +438,15 @@ export default function Home() {
     }
   }, [audioSrc]);
 
-  // Load generated audio into waveform (Kokoro)
+  // Load generated audio into waveform (AI TTS)
   useEffect(() => {
-    if (kokoroAudioSrc && kokoroWaveformRef.current) {
-      if (kokoroWavesurferRef.current) {
-        kokoroWavesurferRef.current.destroy();
+    if (ttsAudioSrc && ttsWaveformRef.current) {
+      if (ttsWavesurferRef.current) {
+        ttsWavesurferRef.current.destroy();
       }
 
       const wavesurfer = WaveSurfer.create({
-        container: kokoroWaveformRef.current,
+        container: ttsWaveformRef.current,
         waveColor: "hsl(var(--chart-2) / 0.5)",
         progressColor: "hsl(var(--chart-2))",
         cursorColor: "hsl(var(--chart-2))",
@@ -456,22 +456,22 @@ export default function Home() {
         normalize: true,
       });
 
-      wavesurfer.load(kokoroAudioSrc);
+      wavesurfer.load(ttsAudioSrc);
 
-      wavesurfer.on("play", () => setIsKokoroPlaying(true));
-      wavesurfer.on("pause", () => setIsKokoroPlaying(false));
-      wavesurfer.on("finish", () => setIsKokoroPlaying(false));
+      wavesurfer.on("play", () => setIsTtsPlaying(true));
+      wavesurfer.on("pause", () => setIsTtsPlaying(false));
+      wavesurfer.on("finish", () => setIsTtsPlaying(false));
 
-      kokoroWavesurferRef.current = wavesurfer;
+      ttsWavesurferRef.current = wavesurfer;
     }
-  }, [kokoroAudioSrc]);
+  }, [ttsAudioSrc]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (refWavesurferRef.current) refWavesurferRef.current.destroy();
       if (genWavesurferRef.current) genWavesurferRef.current.destroy();
-      if (kokoroWavesurferRef.current) kokoroWavesurferRef.current.destroy();
+      if (ttsWavesurferRef.current) ttsWavesurferRef.current.destroy();
     };
   }, []);
 
@@ -512,9 +512,9 @@ export default function Home() {
               </div>
             </button>
             <button
-              onClick={() => setActiveTab("kokoro")}
+              onClick={() => setActiveTab("tts")}
               className={`px-6 py-2.5 rounded-md font-medium transition-all ${
-                activeTab === "kokoro"
+                activeTab === "tts"
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
@@ -753,7 +753,7 @@ export default function Home() {
         )}
 
         {/* AI Voices Tab */}
-        {activeTab === "kokoro" && (
+        {activeTab === "tts" && (
           <div className="space-y-8 animate-fadeIn">
             {/* Voice Selector */}
             <div className="relative">
@@ -770,8 +770,8 @@ export default function Home() {
               </div>
 
               <VoiceSelector
-                selectedVoice={kokoroVoice}
-                onVoiceChange={setKokoroVoice}
+                selectedVoice={ttsVoice}
+                onVoiceChange={setTtsVoice}
               />
             </div>
 
@@ -784,7 +784,7 @@ export default function Home() {
                     Adjust the speaking speed
                   </p>
                 </div>
-                <span className="text-sm font-mono text-primary">{kokoroSpeed.toFixed(1)}x</span>
+                <span className="text-sm font-mono text-primary">{ttsSpeed.toFixed(1)}x</span>
               </div>
 
               <input
@@ -792,8 +792,8 @@ export default function Home() {
                 min="0.5"
                 max="2.0"
                 step="0.1"
-                value={kokoroSpeed}
-                onChange={(e) => setKokoroSpeed(parseFloat(e.target.value))}
+                value={ttsSpeed}
+                onChange={(e) => setTtsSpeed(parseFloat(e.target.value))}
                 className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
               />
               <div className="flex justify-between text-xs text-muted-foreground mt-2">
@@ -821,8 +821,8 @@ export default function Home() {
               </div>
 
               <textarea
-                value={kokoroText}
-                onChange={(e) => setKokoroText(e.target.value)}
+                value={ttsText}
+                onChange={(e) => setTtsText(e.target.value)}
                 className="w-full h-40 bg-card border border-border rounded-2xl p-6 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
                 placeholder="Type or paste your text here..."
               />
@@ -831,12 +831,12 @@ export default function Home() {
             {/* Generate Button */}
             <div className="flex justify-center">
               <Button
-                onClick={handleKokoroGenerate}
-                disabled={kokoroLoading || !kokoroText || charCount > maxChars}
+                onClick={handleTtsGenerate}
+                disabled={ttsLoading || !ttsText || charCount > maxChars}
                 className="h-14 px-12 text-lg font-semibold rounded-xl shadow-lg"
                 size="lg"
               >
-                {kokoroLoading ? (
+                {ttsLoading ? (
                   <><Loader2 className="w-5 h-5 mr-3 animate-spin" /> Generating...</>
                 ) : (
                   <><Sparkles className="w-5 h-5 mr-3" /> Generate Speech</>
@@ -845,7 +845,7 @@ export default function Home() {
             </div>
 
             {/* Generated Audio Section */}
-            {kokoroAudioSrc && (
+            {ttsAudioSrc && (
               <div className="relative animate-fadeIn">
                 <div className="flex items-center justify-between mb-4">
                   <div>
@@ -860,8 +860,8 @@ export default function Home() {
                   <Button
                     onClick={() => {
                       const link = document.createElement('a');
-                      link.href = kokoroAudioSrc;
-                      link.download = `voice-${kokoroVoice.toLowerCase().replace(/\s+/g, '-')}.mp3`;
+                      link.href = ttsAudioSrc;
+                      link.download = `voice-${ttsVoice.toLowerCase().replace(/\s+/g, '-')}.mp3`;
                       link.click();
                     }}
                     variant="outline"
@@ -873,16 +873,16 @@ export default function Home() {
 
                 <div className="bg-card border border-green-500/20 rounded-2xl p-6">
                   <div className="bg-muted/50 rounded-xl p-4 mb-4">
-                    <div ref={kokoroWaveformRef} />
+                    <div ref={ttsWaveformRef} />
                   </div>
 
                   <div className="flex justify-center">
                     <Button
-                      onClick={toggleKokoroAudio}
+                      onClick={toggleTtsAudio}
                       size="lg"
                       className="bg-green-600 hover:bg-green-700 text-white"
                     >
-                      {isKokoroPlaying ? (
+                      {isTtsPlaying ? (
                         <><Pause className="w-5 h-5 mr-2" /> Pause</>
                       ) : (
                         <><Play className="w-5 h-5 mr-2" /> Play Generated Speech</>
