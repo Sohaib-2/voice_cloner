@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Upload, Mic, Wand2, Download, Play, Pause, Volume2, Loader2 } from "lucide-react";
+import AudioTrimmer from "@/components/AudioTrimmer";
 
 export default function Home() {
   const [text, setText] = useState("Hello, This is a test of your new AI voice cloning app.");
@@ -14,13 +15,17 @@ export default function Home() {
   const [isRefPlaying, setIsRefPlaying] = useState(false);
   const [isGenPlaying, setIsGenPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [showTrimmer, setShowTrimmer] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [audioDuration, setAudioDuration] = useState(0);
 
   const refAudioRef = useRef<HTMLAudioElement>(null);
   const genAudioRef = useRef<HTMLAudioElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const charCount = text.length;
-  const maxChars = 500;
+  const maxChars = 50000;
+  const maxAudioDuration = 25; // seconds
 
   // Helper: Convert File to Base64
   const toBase64 = (file: File) => new Promise<string>((resolve, reject) => {
@@ -30,13 +35,59 @@ export default function Home() {
     reader.onerror = error => reject(error);
   });
 
+  // Check audio duration
+  const checkAudioDuration = (file: File): Promise<number> => {
+    return new Promise((resolve, reject) => {
+      const audio = new Audio();
+      const url = URL.createObjectURL(file);
+
+      audio.addEventListener("loadedmetadata", () => {
+        URL.revokeObjectURL(url);
+        resolve(audio.duration);
+      });
+
+      audio.addEventListener("error", () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Failed to load audio"));
+      });
+
+      audio.src = url;
+    });
+  };
+
   // Handle file upload
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      setFile(selectedFile);
-      const url = URL.createObjectURL(selectedFile);
-      setRefAudioSrc(url);
+      try {
+        const duration = await checkAudioDuration(selectedFile);
+        setAudioDuration(duration);
+
+        // Always show trimmer for all audio files
+        setUploadedFile(selectedFile);
+        setShowTrimmer(true);
+      } catch (error) {
+        alert("Failed to load audio file. Please try a different file.");
+        e.target.value = "";
+      }
+    }
+  };
+
+  // Handle trimmed audio
+  const handleTrimComplete = (trimmedFile: File) => {
+    setFile(trimmedFile);
+    const url = URL.createObjectURL(trimmedFile);
+    setRefAudioSrc(url);
+    setShowTrimmer(false);
+    setUploadedFile(null);
+  };
+
+  // Cancel trimming
+  const handleTrimCancel = () => {
+    setShowTrimmer(false);
+    setUploadedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
 
@@ -208,6 +259,29 @@ export default function Home() {
           </p>
         </div>
 
+        {/* Audio Trimmer Modal */}
+        {showTrimmer && uploadedFile && (
+          <Card className="border-2 border-violet-300 dark:border-violet-700 shadow-xl">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-violet-700 dark:text-violet-300">
+                <Upload className="w-5 h-5" />
+                Select Audio Section
+              </CardTitle>
+              <CardDescription>
+                Drag the blue region on the waveform to select the best part of your audio (max 25 seconds)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AudioTrimmer
+                audioFile={uploadedFile}
+                onTrimComplete={handleTrimComplete}
+                onCancel={handleTrimCancel}
+                maxDuration={maxAudioDuration}
+              />
+            </CardContent>
+          </Card>
+        )}
+
         {/* Main Content */}
         <div className="grid md:grid-cols-2 gap-6">
           {/* Reference Voice Upload */}
@@ -218,7 +292,7 @@ export default function Home() {
                 Reference Voice
               </CardTitle>
               <CardDescription>
-                Upload a 3-10 second audio sample of the voice you want to clone
+                Upload a clear audio sample (max 25 seconds) of the voice you want to clone
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
