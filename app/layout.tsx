@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Next.js + shadcn/ui Starter",
-  description: "Built with Next.js 15, Tailwind CSS, and shadcn/ui",
+  title: "AI Voice Cloner",
+  description: "Clone any voice with AI-powered text-to-speech technology",
 };
 
 export default function RootLayout({

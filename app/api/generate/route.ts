@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+const TEXT_LENGTH_THRESHOLD = 500; // Characters threshold for sync vs async
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -9,9 +11,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing text or audio" }, { status: 400 });
     }
 
+    // Decide between sync and async based on text length
+    const useAsync = gen_text.length >= TEXT_LENGTH_THRESHOLD;
+    const endpoint = useAsync ? "run" : "runsync";
+
     // 1. Call RunPod Serverless
     const runpodResponse = await fetch(
-      `https://api.runpod.ai/v2/${process.env.RUNPOD_ENDPOINT_ID}/runsync`,
+      `https://api.runpod.ai/v2/${process.env.RUNPOD_ENDPOINT_ID}/${endpoint}`,
       {
         method: "POST",
         headers: {
@@ -33,17 +39,30 @@ export async function POST(request: Request) {
 
     const data = await runpodResponse.json();
 
-    // 2. Error Handling from RunPod
-    if (data.status !== "COMPLETED") {
-      console.error("RunPod Error:", data);
-      return NextResponse.json({ error: "Generation failed", details: data }, { status: 500 });
-    }
+    // 2. Handle Response based on endpoint type
+    if (useAsync) {
+      // Async endpoint returns job ID immediately
+      if (data.id) {
+        return NextResponse.json({
+          jobId: data.id,
+          status: "IN_QUEUE"
+        });
+      } else {
+        console.error("RunPod Async Error:", data);
+        return NextResponse.json({ error: "Failed to queue job", details: data }, { status: 500 });
+      }
+    } else {
+      // Sync endpoint returns result directly
+      if (data.status !== "COMPLETED") {
+        console.error("RunPod Sync Error:", data);
+        return NextResponse.json({ error: "Generation failed", details: data }, { status: 500 });
+      }
 
-    // 3. Return Audio to Frontend (Pass-through)
-    return NextResponse.json({ 
-      audio: data.output.audio, // Base64 MP3
-      duration: data.output.duration_sec 
-    });
+      return NextResponse.json({
+        audio: data.output.audio, // Base64 MP3
+        duration: data.output.duration_sec
+      });
+    }
 
   } catch (error) {
     console.error(error);
