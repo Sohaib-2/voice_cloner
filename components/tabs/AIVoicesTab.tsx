@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Sparkles, Play, Pause, Download, Loader2, Volume2, AlertCircle } from "lucide-react";
-import { useKokoroTTS, KOKORO_VOICES, type KokoroVoice } from "@/hooks/useKokoroTTS";
+import { useKokoroTTS, KOKORO_VOICES } from "@/hooks/useKokoroTTS";
 
 export default function AIVoicesTab() {
   const [text, setText] = useState("");
@@ -14,10 +14,12 @@ export default function AIVoicesTab() {
   const [filterLanguage, setFilterLanguage] = useState<string>("all");
   const [filterGender, setFilterGender] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [previewVoice, setPreviewVoice] = useState<string | null>(null);
+  const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
 
   const { generateSpeech, isLoading, error, isInitialized, progress } = useKokoroTTS();
 
-  const maxChars = 500;
+  const maxChars = 50000;
   const languages = ["all", ...Array.from(new Set(KOKORO_VOICES.map(v => v.language)))];
   const genders = ["all", "Male", "Female"];
 
@@ -77,13 +79,51 @@ export default function AIVoicesTab() {
 
     const a = document.createElement('a');
     a.href = audioUrl;
-    a.download = `kokoro-tts-${selectedVoice}-${Date.now()}.wav`;
+    a.download = `voice-${selectedVoice}-${Date.now()}.wav`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
   };
 
   const selectedVoiceData = KOKORO_VOICES.find(v => v.id === selectedVoice);
+
+  const handlePreviewVoice = async (voiceId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    // Stop any currently playing preview
+    if (previewAudio) {
+      previewAudio.pause();
+      setPreviewAudio(null);
+    }
+
+    // If clicking the same voice that's playing, just stop it
+    if (previewVoice === voiceId) {
+      setPreviewVoice(null);
+      return;
+    }
+
+    try {
+      setPreviewVoice(voiceId);
+      const voiceData = KOKORO_VOICES.find(v => v.id === voiceId);
+      const previewText = `Hello, I'm ${voiceData?.name}. This is how I sound.`;
+
+      const url = await generateSpeech(previewText, voiceId, 1.0);
+
+      const audio = new Audio(url);
+      setPreviewAudio(audio);
+
+      audio.addEventListener('ended', () => {
+        setPreviewVoice(null);
+        setPreviewAudio(null);
+        URL.revokeObjectURL(url);
+      });
+
+      audio.play();
+    } catch (err) {
+      console.error("Failed to preview voice:", err);
+      setPreviewVoice(null);
+    }
+  };
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -98,13 +138,13 @@ export default function AIVoicesTab() {
               60+ AI Voices in 8 Languages
             </h2>
             <p className="text-muted-foreground">
-              Generate natural-sounding speech with Kokoro TTS. Powered by an 82M parameter model running 100% in your browser.
+              Generate natural-sounding speech with advanced AI technology. Professional quality voice synthesis in multiple languages.
             </p>
             {!isInitialized && progress > 0 && (
               <div className="mt-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Loading model... {progress}%
+                  Initializing AI voices... {progress}%
                 </div>
                 <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                   <div
@@ -282,9 +322,8 @@ export default function AIVoicesTab() {
             {/* Voice List */}
             <div className="space-y-2 max-h-[600px] overflow-y-auto">
               {filteredVoices.map(voice => (
-                <button
+                <div
                   key={voice.id}
-                  onClick={() => setSelectedVoice(voice.id)}
                   className={`w-full text-left p-3 rounded-lg border transition-all ${
                     selectedVoice === voice.id
                       ? "bg-primary/10 border-primary"
@@ -292,16 +331,35 @@ export default function AIVoicesTab() {
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSelectedVoice(voice.id)}
+                      className="flex items-center gap-2 flex-1 text-left"
+                    >
                       <span className="text-lg">{voice.flag}</span>
                       <span className="font-medium text-sm">{voice.name}</span>
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => handlePreviewVoice(voice.id, e)}
+                        disabled={isLoading}
+                        className="w-7 h-7 rounded-full bg-primary/10 hover:bg-primary/20 flex items-center justify-center transition-colors disabled:opacity-50"
+                        title="Preview voice"
+                      >
+                        {previewVoice === voice.id && isLoading ? (
+                          <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
+                        ) : previewVoice === voice.id ? (
+                          <Pause className="w-3.5 h-3.5 text-primary" />
+                        ) : (
+                          <Play className="w-3.5 h-3.5 text-primary ml-0.5" />
+                        )}
+                      </button>
+                      <span className="text-xs px-2 py-0.5 bg-muted rounded-full">
+                        {voice.gender}
+                      </span>
                     </div>
-                    <span className="text-xs px-2 py-0.5 bg-muted rounded-full">
-                      {voice.gender}
-                    </span>
                   </div>
                   <p className="text-xs text-muted-foreground">{voice.description}</p>
-                </button>
+                </div>
               ))}
             </div>
 
