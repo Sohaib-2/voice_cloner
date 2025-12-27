@@ -1,25 +1,315 @@
 "use client";
 
-import { Sparkles, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Sparkles, Play, Pause, Download, Loader2, Volume2, AlertCircle } from "lucide-react";
+import { useKokoroTTS, KOKORO_VOICES, type KokoroVoice } from "@/hooks/useKokoroTTS";
 
 export default function AIVoicesTab() {
+  const [text, setText] = useState("");
+  const [selectedVoice, setSelectedVoice] = useState<string>("af_bella");
+  const [speed, setSpeed] = useState(1.0);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const [filterLanguage, setFilterLanguage] = useState<string>("all");
+  const [filterGender, setFilterGender] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const { generateSpeech, isLoading, error, isInitialized, progress } = useKokoroTTS();
+
+  const maxChars = 500;
+  const languages = ["all", ...Array.from(new Set(KOKORO_VOICES.map(v => v.language)))];
+  const genders = ["all", "Male", "Female"];
+
+  // Filter voices based on selected filters
+  const filteredVoices = KOKORO_VOICES.filter(voice => {
+    const matchesLanguage = filterLanguage === "all" || voice.language === filterLanguage;
+    const matchesGender = filterGender === "all" || voice.gender === filterGender;
+    const matchesSearch = searchQuery === "" ||
+      voice.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      voice.description.toLowerCase().includes(searchQuery.toLowerCase());
+
+    return matchesLanguage && matchesGender && matchesSearch;
+  });
+
+  const handleGenerate = async () => {
+    if (!text.trim()) return;
+
+    try {
+      // Clean up old audio
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+      if (audioElement) {
+        audioElement.pause();
+        setIsPlaying(false);
+      }
+
+      const url = await generateSpeech(text, selectedVoice, speed);
+      setAudioUrl(url);
+
+      // Create new audio element
+      const audio = new Audio(url);
+      setAudioElement(audio);
+
+      audio.addEventListener('ended', () => setIsPlaying(false));
+      audio.play();
+      setIsPlaying(true);
+    } catch (err) {
+      console.error("Failed to generate speech:", err);
+    }
+  };
+
+  const togglePlayPause = () => {
+    if (!audioElement) return;
+
+    if (isPlaying) {
+      audioElement.pause();
+      setIsPlaying(false);
+    } else {
+      audioElement.play();
+      setIsPlaying(true);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!audioUrl) return;
+
+    const a = document.createElement('a');
+    a.href = audioUrl;
+    a.download = `kokoro-tts-${selectedVoice}-${Date.now()}.wav`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const selectedVoiceData = KOKORO_VOICES.find(v => v.id === selectedVoice);
+
   return (
     <div className="space-y-8 animate-fadeIn">
-      {/* Coming Soon Message */}
-      <div className="flex items-center justify-center min-h-[500px]">
-        <div className="text-center max-w-md mx-auto">
-          <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
-            <Sparkles className="w-12 h-12 text-primary" />
+      {/* Introduction Banner */}
+      <div className="bg-gradient-to-r from-primary/10 via-purple-500/10 to-pink-500/10 border border-primary/20 rounded-xl p-6">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+            <Sparkles className="w-6 h-6 text-primary" />
           </div>
-          <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-primary via-purple-500 to-pink-500 bg-clip-text text-transparent">
-            AI Voices Coming Soon
-          </h2>
-          <p className="text-muted-foreground text-lg mb-6">
-            We're currently working on bringing you 60+ premium AI voices in 8 languages. This feature will be available very soon!
-          </p>
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/20 rounded-full text-primary text-sm font-medium">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Under Development
+          <div>
+            <h2 className="text-2xl font-bold mb-2 bg-gradient-to-r from-primary via-purple-500 to-pink-500 bg-clip-text text-transparent">
+              60+ AI Voices in 8 Languages
+            </h2>
+            <p className="text-muted-foreground">
+              Generate natural-sounding speech with Kokoro TTS. Powered by an 82M parameter model running 100% in your browser.
+            </p>
+            {!isInitialized && progress > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading model... {progress}%
+                </div>
+                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary to-purple-500 transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column - Text Input & Controls */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Text Input */}
+          <div className="bg-card border border-border rounded-xl p-6">
+            <label className="block text-sm font-medium mb-3">
+              Enter Text
+              <span className="text-muted-foreground ml-2">
+                ({text.length}/{maxChars} characters)
+              </span>
+            </label>
+            <textarea
+              value={text}
+              onChange={(e) => {
+                if (e.target.value.length <= maxChars) {
+                  setText(e.target.value);
+                }
+              }}
+              placeholder="Type or paste your text here to generate speech..."
+              className="w-full h-40 px-4 py-3 bg-background border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          {/* Speed Control */}
+          <div className="bg-card border border-border rounded-xl p-6">
+            <label className="block text-sm font-medium mb-3">
+              Speech Speed: {speed.toFixed(1)}x
+            </label>
+            <input
+              type="range"
+              min="0.5"
+              max="2.0"
+              step="0.1"
+              value={speed}
+              onChange={(e) => setSpeed(parseFloat(e.target.value))}
+              className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground mt-2">
+              <span>0.5x (Slower)</span>
+              <span>2.0x (Faster)</span>
+            </div>
+          </div>
+
+          {/* Generate Button */}
+          <button
+            onClick={handleGenerate}
+            disabled={!text.trim() || isLoading}
+            className="w-full bg-gradient-to-r from-primary via-purple-500 to-pink-500 text-white font-medium py-4 px-6 rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Generating Speech...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5" />
+                Generate Speech
+              </>
+            )}
+          </button>
+
+          {/* Error Display */}
+          {error && (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-destructive">Error</p>
+                <p className="text-sm text-destructive/80 mt-1">{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Audio Player */}
+          {audioUrl && (
+            <div className="bg-card border border-border rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Volume2 className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Generated Audio</p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedVoiceData?.name} - {selectedVoiceData?.language}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={togglePlayPause}
+                  className="w-12 h-12 rounded-full bg-primary hover:bg-primary/90 text-white flex items-center justify-center transition-colors"
+                >
+                  {isPlaying ? (
+                    <Pause className="w-5 h-5" />
+                  ) : (
+                    <Play className="w-5 h-5 ml-0.5" />
+                  )}
+                </button>
+
+                <button
+                  onClick={handleDownload}
+                  className="flex items-center gap-2 px-4 py-2 bg-muted hover:bg-muted/80 rounded-lg transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Download
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right Column - Voice Selection */}
+        <div className="space-y-6">
+          <div className="bg-card border border-border rounded-xl p-6">
+            <h3 className="font-medium mb-4">Select Voice</h3>
+
+            {/* Search */}
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search voices..."
+              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+
+            {/* Language Filter */}
+            <div className="mb-4">
+              <label className="block text-xs text-muted-foreground mb-2">Language</label>
+              <select
+                value={filterLanguage}
+                onChange={(e) => setFilterLanguage(e.target.value)}
+                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {languages.map(lang => (
+                  <option key={lang} value={lang}>
+                    {lang === "all" ? "All Languages" : lang}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Gender Filter */}
+            <div className="mb-4">
+              <label className="block text-xs text-muted-foreground mb-2">Gender</label>
+              <select
+                value={filterGender}
+                onChange={(e) => setFilterGender(e.target.value)}
+                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {genders.map(gender => (
+                  <option key={gender} value={gender}>
+                    {gender === "all" ? "All Genders" : gender}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Voice List */}
+            <div className="space-y-2 max-h-[600px] overflow-y-auto">
+              {filteredVoices.map(voice => (
+                <button
+                  key={voice.id}
+                  onClick={() => setSelectedVoice(voice.id)}
+                  className={`w-full text-left p-3 rounded-lg border transition-all ${
+                    selectedVoice === voice.id
+                      ? "bg-primary/10 border-primary"
+                      : "bg-background border-border hover:bg-muted"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{voice.flag}</span>
+                      <span className="font-medium text-sm">{voice.name}</span>
+                    </div>
+                    <span className="text-xs px-2 py-0.5 bg-muted rounded-full">
+                      {voice.gender}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{voice.description}</p>
+                </button>
+              ))}
+            </div>
+
+            {filteredVoices.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                No voices found matching your filters
+              </p>
+            )}
           </div>
         </div>
       </div>
