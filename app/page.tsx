@@ -22,7 +22,7 @@ export default function Home() {
   const [removeNoise, setRemoveNoise] = useState(true);
 
   // Kokoro TTS State
-  const [kokoroText, setKokoroText] = useState("Hello! This is Kokoro TTS. Try different voices in multiple languages!");
+  const [kokoroText, setKokoroText] = useState("Hello! This is Infinity TTS. Try different voices in multiple languages!");
   const [kokoroVoice, setKokoroVoice] = useState("Jessica");
   const [kokoroSpeed, setKokoroSpeed] = useState(1.0);
   const [kokoroLoading, setKokoroLoading] = useState(false);
