@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Sparkles, Play, Pause, Download, Loader2, Volume2, AlertCircle } from "lucide-react";
 import { useKokoroTTS, KOKORO_VOICES } from "@/hooks/useKokoroTTS";
+import WaveSurfer from "wavesurfer.js";
 
 export default function AIVoicesTab() {
   const [text, setText] = useState("");
@@ -10,12 +11,16 @@ export default function AIVoicesTab() {
   const [speed, setSpeed] = useState(1.0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [filterLanguage, setFilterLanguage] = useState<string>("all");
   const [filterGender, setFilterGender] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [previewVoice, setPreviewVoice] = useState<string | null>(null);
   const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [audioSize, setAudioSize] = useState(0);
+
+  const waveformRef = useRef<HTMLDivElement>(null);
+  const wavesurferRef = useRef<WaveSurfer | null>(null);
 
   const { generateSpeech, isLoading, error, isInitialized, progress } = useKokoroTTS();
 
@@ -42,35 +47,74 @@ export default function AIVoicesTab() {
       if (audioUrl) {
         URL.revokeObjectURL(audioUrl);
       }
-      if (audioElement) {
-        audioElement.pause();
+      if (wavesurferRef.current) {
+        wavesurferRef.current.pause();
         setIsPlaying(false);
       }
 
       const url = await generateSpeech(text, selectedVoice, speed);
+
+      // Get audio file size
+      const response = await fetch(url);
+      const blob = await response.blob();
+      setAudioSize(blob.size);
+
       setAudioUrl(url);
-
-      // Create new audio element
-      const audio = new Audio(url);
-      setAudioElement(audio);
-
-      audio.addEventListener('ended', () => setIsPlaying(false));
-      audio.play();
-      setIsPlaying(true);
     } catch (err) {
       console.error("Failed to generate speech:", err);
     }
   };
 
+  // Initialize waveform when audio is generated
+  useEffect(() => {
+    if (audioUrl && waveformRef.current) {
+      if (wavesurferRef.current) {
+        wavesurferRef.current.destroy();
+      }
+
+      const wavesurfer = WaveSurfer.create({
+        container: waveformRef.current,
+        waveColor: "oklch(0.7 0.18 195 / 0.4)",
+        progressColor: "oklch(0.7 0.18 195)",
+        cursorColor: "oklch(0.8 0.22 175)",
+        cursorWidth: 3,
+        barWidth: 2,
+        barGap: 1,
+        height: 120,
+        normalize: true,
+        backend: "WebAudio",
+      });
+
+      wavesurfer.load(audioUrl);
+
+      wavesurfer.on("ready", () => {
+        setAudioDuration(wavesurfer.getDuration());
+      });
+
+      wavesurfer.on("play", () => setIsPlaying(true));
+      wavesurfer.on("pause", () => setIsPlaying(false));
+      wavesurfer.on("finish", () => setIsPlaying(false));
+
+      wavesurferRef.current = wavesurfer;
+    }
+  }, [audioUrl]);
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (wavesurferRef.current) {
+        wavesurferRef.current.destroy();
+      }
+    };
+  }, []);
+
   const togglePlayPause = () => {
-    if (!audioElement) return;
+    if (!wavesurferRef.current) return;
 
     if (isPlaying) {
-      audioElement.pause();
-      setIsPlaying(false);
+      wavesurferRef.current.pause();
     } else {
-      audioElement.play();
-      setIsPlaying(true);
+      wavesurferRef.current.play();
     }
   };
 
@@ -86,6 +130,13 @@ export default function AIVoicesTab() {
   };
 
   const selectedVoiceData = KOKORO_VOICES.find(v => v.id === selectedVoice);
+
+  // Format duration as Xm Ys
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}m ${secs}s`;
+  };
 
   const handlePreviewVoice = async (voiceId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -234,11 +285,11 @@ export default function AIVoicesTab() {
 
           {/* Audio Player */}
           {audioUrl && (
-            <div className="bg-card border border-border rounded-xl p-6">
+            <div className="bg-card border border-green-500/20 rounded-xl p-6 animate-fadeIn">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Volume2 className="w-6 h-6 text-primary" />
+                  <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
+                    <Sparkles className="w-6 h-6 text-green-500" />
                   </div>
                   <div>
                     <p className="font-medium">Generated Audio</p>
@@ -247,26 +298,44 @@ export default function AIVoicesTab() {
                     </p>
                   </div>
                 </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={togglePlayPause}
-                  className="w-12 h-12 rounded-full bg-primary hover:bg-primary/90 text-white flex items-center justify-center transition-colors"
-                >
-                  {isPlaying ? (
-                    <Pause className="w-5 h-5" />
-                  ) : (
-                    <Play className="w-5 h-5 ml-0.5" />
-                  )}
-                </button>
-
                 <button
                   onClick={handleDownload}
                   className="flex items-center gap-2 px-4 py-2 bg-muted hover:bg-muted/80 rounded-lg transition-colors"
                 >
                   <Download className="w-4 h-4" />
                   Download
+                </button>
+              </div>
+
+              <div className="bg-muted/50 rounded-xl p-4 mb-4">
+                <div ref={waveformRef} />
+              </div>
+
+              <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
+                <div>
+                  Duration: <span className="font-mono text-primary">{formatDuration(audioDuration)}</span>
+                </div>
+                <div>
+                  Size: <span className="font-mono text-primary">{(audioSize / 1024).toFixed(2)} KB</span>
+                </div>
+              </div>
+
+              <div className="flex justify-center">
+                <button
+                  onClick={togglePlayPause}
+                  className="w-full max-w-xs bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                >
+                  {isPlaying ? (
+                    <>
+                      <Pause className="w-5 h-5" />
+                      Pause
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-5 h-5" />
+                      Play Generated Voice
+                    </>
+                  )}
                 </button>
               </div>
             </div>
