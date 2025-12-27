@@ -36,9 +36,10 @@ export default function AudioTrimmer({
     // Create WaveSurfer instance
     const wavesurfer = WaveSurfer.create({
       container: waveformRef.current,
-      waveColor: "#a78bfa",
-      progressColor: "#7c3aed",
-      cursorColor: "#7c3aed",
+      waveColor: "oklch(0.72 0.22 295 / 0.4)",
+      progressColor: "oklch(0.72 0.22 295)",
+      cursorColor: "oklch(0.85 0.25 320)",
+      cursorWidth: 3,
       barWidth: 2,
       barGap: 1,
       height: 120,
@@ -67,7 +68,7 @@ export default function AudioTrimmer({
       regions.addRegion({
         start: start,
         end: end,
-        color: "rgba(124, 58, 237, 0.3)",
+        color: "oklch(0.72 0.22 295 / 0.25)",
         drag: true,
         resize: true,
       });

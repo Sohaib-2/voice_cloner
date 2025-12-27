@@ -65,9 +65,10 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
 
       const wavesurfer = WaveSurfer.create({
         container: refWaveformRef.current,
-        waveColor: "hsl(var(--primary) / 0.5)",
-        progressColor: "hsl(var(--primary))",
-        cursorColor: "hsl(var(--primary))",
+        waveColor: "oklch(0.72 0.22 295 / 0.4)",
+        progressColor: "oklch(0.72 0.22 295)",
+        cursorColor: "oklch(0.85 0.25 320)",
+        cursorWidth: 3,
         barWidth: 2,
         barGap: 1,
         height: 120,
@@ -89,7 +90,7 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
         regions.addRegion({
           start: 0,
           end: regionDuration,
-          color: "hsla(var(--primary) / 0.3)",
+          color: "oklch(0.72 0.22 295 / 0.25)",
           drag: true,
           resize: true,
         });
@@ -211,9 +212,10 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
 
       const wavesurfer = WaveSurfer.create({
         container: genWaveformRef.current,
-        waveColor: "hsl(var(--chart-2) / 0.5)",
-        progressColor: "hsl(var(--chart-2))",
-        cursorColor: "hsl(var(--chart-2))",
+        waveColor: "oklch(0.7 0.18 195 / 0.4)",
+        progressColor: "oklch(0.7 0.18 195)",
+        cursorColor: "oklch(0.8 0.22 175)",
+        cursorWidth: 3,
         barWidth: 2,
         barGap: 1,
         height: 120,
