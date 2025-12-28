@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT UNIQUE NOT NULL,
   password TEXT NOT NULL,
   status TEXT DEFAULT 'active' CHECK(status IN ('active', 'inactive')),
-  current_plan TEXT DEFAULT 'starter' CHECK(current_plan IN ('starter', 'basic', 'pro', 'enterprise')),
+  current_plan TEXT DEFAULT 'starter' CHECK(current_plan IN ('starter', 'basic', 'pro', 'enterprise', 'custom')),
   plan_started_at INTEGER NOT NULL,
   plan_expires_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL
