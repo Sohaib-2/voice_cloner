@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyToken } from './lib/auth';
+import { db } from './lib/d1-client';
 
 // Paths that require authentication
 const protectedPaths = ['/', '/dashboard', '/admin'];
+
+// Paths that require admin role
+const adminPaths = ['/admin'];
 
 // Paths that should redirect if already logged in
 const authPaths = ['/login'];
@@ -16,6 +20,7 @@ export async function middleware(request: NextRequest) {
     pathname === path || pathname.startsWith(path + '/')
   );
 
+  const isAdminPath = adminPaths.some(path => pathname.startsWith(path));
   const isAuthPath = authPaths.some(path => pathname.startsWith(path));
 
   // Get token from cookies
@@ -32,6 +37,16 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
+  }
+
+  // If accessing admin path, check if user has admin role
+  if (isAdminPath && session) {
+    const user = await db.prepare('SELECT role FROM users WHERE id = ?').bind(session.userId).first();
+    if (!user || user.role !== 'admin') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/';
+      return NextResponse.redirect(url);
+    }
   }
 
   // If accessing auth path (like /login) with valid session, redirect to main page

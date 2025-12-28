@@ -36,11 +36,9 @@ export class D1Client {
       });
 
       const data = await response.json();
-      console.log('D1 Response:', JSON.stringify(data, null, 2));
 
       // Handle Cloudflare API response format
       if (!data.success) {
-        console.error('D1 API Error:', data.errors);
         return { success: false, results: [], errors: data.errors };
       }
 
@@ -56,7 +54,6 @@ export class D1Client {
         meta: queryResult.meta
       };
     } catch (error) {
-      console.error('D1 Query Error:', error);
       return { success: false, results: [], errors: [error] };
     }
   }
