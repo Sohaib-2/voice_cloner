@@ -55,29 +55,22 @@ export default function AIVoicesTab() {
     }
   };
 
-  // Load recordings on mount and restore generated audio from localStorage
+  // Load recordings on mount (no localStorage persistence for TTS - blob URLs don't survive refresh)
   useEffect(() => {
-    fetchRecentAudios();
-
-    // Restore generated audio from localStorage
-    const savedAudio = localStorage.getItem('tts_generatedAudio');
-    if (savedAudio) {
-      try {
-        const { audioUrl: savedUrl, duration, size, timestamp, voiceId } = JSON.parse(savedAudio);
-        // Only restore if less than 1 hour old
-        if (Date.now() - timestamp < 3600000) {
-          setAudioUrl(savedUrl);
-          setAudioDuration(duration);
-          setAudioSize(size);
-          if (voiceId) setSelectedVoice(voiceId);
-        } else {
-          // Clear old data
-          localStorage.removeItem('tts_generatedAudio');
-        }
-      } catch (err) {
-        console.error('Failed to restore audio:', err);
+    // Only fetch if this tab is active to prevent duplicate API calls
+    const handleVisibilityChange = () => {
+      const isActive = document.querySelector('[data-tab="tts"]:not(.hidden)');
+      if (isActive) {
+        fetchRecentAudios();
       }
-    }
+    };
+
+    // Initial fetch with a small delay to let the tab system settle
+    const timer = setTimeout(() => {
+      handleVisibilityChange();
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, []);
 
   // Filter voices based on selected filters
@@ -113,15 +106,6 @@ export default function AIVoicesTab() {
 
       setAudioUrl(url);
 
-      // Save to localStorage for persistence
-      localStorage.setItem('tts_generatedAudio', JSON.stringify({
-        audioUrl: url,
-        duration: 0, // Will be set when audio loads
-        size: blob.size,
-        timestamp: Date.now(),
-        voiceId: selectedVoice
-      }));
-
       // Refresh recent audios
       fetchRecentAudios();
     } catch (err) {
@@ -154,18 +138,6 @@ export default function AIVoicesTab() {
       wavesurfer.on("ready", () => {
         const duration = wavesurfer.getDuration();
         setAudioDuration(duration);
-
-        // Update localStorage with duration
-        const savedAudio = localStorage.getItem('tts_generatedAudio');
-        if (savedAudio) {
-          try {
-            const data = JSON.parse(savedAudio);
-            data.duration = duration;
-            localStorage.setItem('tts_generatedAudio', JSON.stringify(data));
-          } catch (err) {
-            console.error('Failed to update duration:', err);
-          }
-        }
       });
 
       wavesurfer.on("play", () => setIsPlaying(true));
@@ -577,7 +549,10 @@ export default function AIVoicesTab() {
                     variant="outline"
                     onClick={() => {
                       const audioPlayer = new Audio(audio.url);
-                      audioPlayer.play();
+                      audioPlayer.play().catch((err) => {
+                        console.error('Failed to play audio:', err);
+                        alert('Failed to play audio. The file may have expired or is not available.');
+                      });
                     }}
                   >
                     <Play className="w-3 h-3" />

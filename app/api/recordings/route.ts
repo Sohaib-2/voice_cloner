@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     const recordings = await Promise.all(
       result.results.map(async (rec: any) => {
         try {
-          const url = await r2.getPresignedUrl(rec.r2_key, 3600); // 1 hour expiry
+          const url = await r2.getPresignedUrl(rec.r2_key, 43200); // 12 hours expiry (matches file deletion time)
           return {
             id: rec.id,
             url,

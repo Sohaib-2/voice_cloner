@@ -174,10 +174,10 @@ export default function Home() {
 
                    <div className="p-1">
                       {/* Keep both tabs mounted to prevent audio from stopping */}
-                      <div className={cn("p-6 sm:p-8", activeTab !== "clone" && "hidden")}>
+                      <div data-tab="clone" className={cn("p-6 sm:p-8", activeTab !== "clone" && "hidden")}>
                         <VoiceCloningTab maxChars={maxChars} maxAudioDuration={maxAudioDuration} />
                       </div>
-                      <div className={cn("p-6 sm:p-8", activeTab !== "tts" && "hidden")}>
+                      <div data-tab="tts" className={cn("p-6 sm:p-8", activeTab !== "tts" && "hidden")}>
                         <AIVoicesTab />
                       </div>
                    </div>

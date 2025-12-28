@@ -73,7 +73,18 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
 
   // Load recordings on mount and restore generated audio from localStorage
   useEffect(() => {
-    fetchRecentAudios();
+    // Only fetch if this tab is active to prevent duplicate API calls
+    const handleVisibilityChange = () => {
+      const isActive = document.querySelector('[data-tab="clone"]:not(.hidden)');
+      if (isActive) {
+        fetchRecentAudios();
+      }
+    };
+
+    // Initial fetch with a small delay to let the tab system settle
+    const timer = setTimeout(() => {
+      handleVisibilityChange();
+    }, 100);
 
     // Restore generated audio from localStorage
     const savedAudio = localStorage.getItem('voiceClone_generatedAudio');
@@ -93,6 +104,8 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
         console.error('Failed to restore audio:', err);
       }
     }
+
+    return () => clearTimeout(timer);
   }, []);
 
   // Handle file upload
@@ -861,7 +874,10 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
                     variant="outline"
                     onClick={() => {
                       const audioPlayer = new Audio(audio.url);
-                      audioPlayer.play();
+                      audioPlayer.play().catch((err) => {
+                        console.error('Failed to play audio:', err);
+                        alert('Failed to play audio. The file may have expired or is not available.');
+                      });
                     }}
                   >
                     <Play className="w-3 h-3" />
