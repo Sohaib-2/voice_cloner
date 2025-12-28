@@ -21,6 +21,8 @@ export default function AIVoicesTab() {
   const [audioSize, setAudioSize] = useState(0);
   const [recentAudios, setRecentAudios] = useState<any[]>([]);
   const [loadingRecordings, setLoadingRecordings] = useState(false);
+  const [playingRecordingId, setPlayingRecordingId] = useState<string | null>(null);
+  const [playingRecordingAudio, setPlayingRecordingAudio] = useState<HTMLAudioElement | null>(null);
 
   const waveformRef = useRef<HTMLDivElement>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
@@ -575,14 +577,42 @@ export default function AIVoicesTab() {
                     size="sm"
                     variant="outline"
                     onClick={() => {
+                      // If this audio is already playing, stop it
+                      if (playingRecordingId === audio.id) {
+                        playingRecordingAudio?.pause();
+                        setPlayingRecordingId(null);
+                        setPlayingRecordingAudio(null);
+                        return;
+                      }
+
+                      // Stop any currently playing audio
+                      if (playingRecordingAudio) {
+                        playingRecordingAudio.pause();
+                      }
+
+                      // Play the new audio
                       const audioPlayer = new Audio(audio.url);
+                      setPlayingRecordingId(audio.id);
+                      setPlayingRecordingAudio(audioPlayer);
+
+                      audioPlayer.addEventListener('ended', () => {
+                        setPlayingRecordingId(null);
+                        setPlayingRecordingAudio(null);
+                      });
+
                       audioPlayer.play().catch((err) => {
                         console.error('Failed to play audio:', err);
                         alert('Failed to play audio. The file may have expired or is not available.');
+                        setPlayingRecordingId(null);
+                        setPlayingRecordingAudio(null);
                       });
                     }}
                   >
-                    <Play className="w-3 h-3" />
+                    {playingRecordingId === audio.id ? (
+                      <Pause className="w-3 h-3" />
+                    ) : (
+                      <Play className="w-3 h-3" />
+                    )}
                   </Button>
                 </div>
               </div>
