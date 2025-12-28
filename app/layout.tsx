@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Voice Studio - AI Voice Generation",
-  description: "Clone voices or generate speech in 60+ AI voices across 8 languages",
+  description: "Clone voices or generate speech in 60+ AI voices across multiple languages",
 };
 
 export default function RootLayout({

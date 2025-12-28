@@ -186,7 +186,7 @@ export default function AIVoicesTab() {
           </div>
           <div>
             <h2 className="text-2xl font-bold mb-2 bg-gradient-to-r from-primary via-purple-500 to-pink-500 bg-clip-text text-transparent">
-              60+ AI Voices in 8 Languages
+              60+ AI Voices
             </h2>
             <p className="text-muted-foreground">
               Generate natural-sounding speech with advanced AI technology. Professional quality voice synthesis in multiple languages.
