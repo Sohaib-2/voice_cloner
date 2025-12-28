@@ -71,10 +71,10 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
     }
   };
 
-  // Load recordings on mount and restore generated audio from localStorage
+  // Load recordings on mount and when tab becomes visible
   useEffect(() => {
-    // Only fetch if this tab is active to prevent duplicate API calls
-    const handleVisibilityChange = () => {
+    // Check if this tab is currently visible
+    const checkAndFetch = () => {
       const isActive = document.querySelector('[data-tab="clone"]:not(.hidden)');
       if (isActive) {
         fetchRecentAudios();
@@ -83,8 +83,35 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
 
     // Initial fetch with a small delay to let the tab system settle
     const timer = setTimeout(() => {
-      handleVisibilityChange();
+      checkAndFetch();
     }, 100);
+
+    // Set up MutationObserver to detect when tab becomes visible
+    const tabElement = document.querySelector('[data-tab="clone"]');
+    if (tabElement) {
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+            const target = mutation.target as HTMLElement;
+            const isHidden = target.classList.contains('hidden');
+            if (!isHidden) {
+              // Tab just became visible, fetch recordings
+              fetchRecentAudios();
+            }
+          }
+        });
+      });
+
+      observer.observe(tabElement, {
+        attributes: true,
+        attributeFilter: ['class']
+      });
+
+      return () => {
+        clearTimeout(timer);
+        observer.disconnect();
+      };
+    }
 
     // Restore generated audio from localStorage
     const savedAudio = localStorage.getItem('voiceClone_generatedAudio');
