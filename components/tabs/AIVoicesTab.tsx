@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Play, Pause, Download, Loader2, Volume2, AlertCircle } from "lucide-react";
+import { Sparkles, Play, Pause, Download, Loader2, Volume2, AlertCircle, Clock } from "lucide-react";
 import { useKokoroTTS, KOKORO_VOICES } from "@/hooks/useKokoroTTS";
 import WaveSurfer from "wavesurfer.js";
+import { Button } from "@/components/ui/button";
 
 export default function AIVoicesTab() {
   const [text, setText] = useState("");
@@ -18,6 +19,8 @@ export default function AIVoicesTab() {
   const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioSize, setAudioSize] = useState(0);
+  const [recentAudios, setRecentAudios] = useState<any[]>([]);
+  const [loadingRecordings, setLoadingRecordings] = useState(false);
 
   const waveformRef = useRef<HTMLDivElement>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
@@ -27,6 +30,55 @@ export default function AIVoicesTab() {
   const maxChars = 50000;
   const languages = ["all", ...Array.from(new Set(KOKORO_VOICES.map(v => v.language)))];
   const genders = ["all", "Male", "Female"];
+
+  // Fetch recent recordings
+  const fetchRecentAudios = async () => {
+    setLoadingRecordings(true);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const res = await fetch("/api/recordings?type=tts", {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setRecentAudios(data.recordings || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch recordings:", error);
+    } finally {
+      setLoadingRecordings(false);
+    }
+  };
+
+  // Load recordings on mount and restore generated audio from localStorage
+  useEffect(() => {
+    fetchRecentAudios();
+
+    // Restore generated audio from localStorage
+    const savedAudio = localStorage.getItem('tts_generatedAudio');
+    if (savedAudio) {
+      try {
+        const { audioUrl: savedUrl, duration, size, timestamp, voiceId } = JSON.parse(savedAudio);
+        // Only restore if less than 1 hour old
+        if (Date.now() - timestamp < 3600000) {
+          setAudioUrl(savedUrl);
+          setAudioDuration(duration);
+          setAudioSize(size);
+          if (voiceId) setSelectedVoice(voiceId);
+        } else {
+          // Clear old data
+          localStorage.removeItem('tts_generatedAudio');
+        }
+      } catch (err) {
+        console.error('Failed to restore audio:', err);
+      }
+    }
+  }, []);
 
   // Filter voices based on selected filters
   const filteredVoices = KOKORO_VOICES.filter(voice => {
@@ -60,6 +112,18 @@ export default function AIVoicesTab() {
       setAudioSize(blob.size);
 
       setAudioUrl(url);
+
+      // Save to localStorage for persistence
+      localStorage.setItem('tts_generatedAudio', JSON.stringify({
+        audioUrl: url,
+        duration: 0, // Will be set when audio loads
+        size: blob.size,
+        timestamp: Date.now(),
+        voiceId: selectedVoice
+      }));
+
+      // Refresh recent audios
+      fetchRecentAudios();
     } catch (err) {
       console.error("Failed to generate speech:", err);
     }
@@ -88,7 +152,20 @@ export default function AIVoicesTab() {
       wavesurfer.load(audioUrl);
 
       wavesurfer.on("ready", () => {
-        setAudioDuration(wavesurfer.getDuration());
+        const duration = wavesurfer.getDuration();
+        setAudioDuration(duration);
+
+        // Update localStorage with duration
+        const savedAudio = localStorage.getItem('tts_generatedAudio');
+        if (savedAudio) {
+          try {
+            const data = JSON.parse(savedAudio);
+            data.duration = duration;
+            localStorage.setItem('tts_generatedAudio', JSON.stringify(data));
+          } catch (err) {
+            console.error('Failed to update duration:', err);
+          }
+        }
       });
 
       wavesurfer.on("play", () => setIsPlaying(true));
@@ -440,6 +517,83 @@ export default function AIVoicesTab() {
           </div>
         </div>
       </div>
+
+      {/* Recent Audios Section */}
+      {recentAudios.length > 0 && (
+        <div className="relative animate-fadeIn mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <Clock className="w-5 h-5 text-purple-500" />
+                Recent TTS Audios
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Your last 3 generated TTS audios (auto-deleted after 12 hours)
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {recentAudios.map((audio, index) => (
+              <div
+                key={audio.id}
+                className="bg-card border border-border rounded-xl p-4 hover:border-purple-500/50 transition-all"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center">
+                      <Volume2 className="w-4 h-4 text-purple-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">TTS Audio #{recentAudios.length - index}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(audio.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-xs text-muted-foreground mb-3">
+                  {audio.charCount} characters
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      const a = document.createElement('a');
+                      a.href = audio.url;
+                      a.download = `tts-${audio.id}.mp3`;
+                      a.click();
+                    }}
+                  >
+                    <Download className="w-3 h-3 mr-1" />
+                    Download
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const audioPlayer = new Audio(audio.url);
+                      audioPlayer.play();
+                    }}
+                  >
+                    <Play className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {loadingRecordings && (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

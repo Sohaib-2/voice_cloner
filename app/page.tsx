@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Sparkles, Mic, User, Settings, AudioWaveform, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-provider";
@@ -171,24 +171,15 @@ export default function Home() {
                 <div className="bg-card/60 backdrop-blur-xl border border-border/60 rounded-3xl shadow-2xl shadow-black/5 ring-1 ring-white/10 dark:ring-white/5 relative overflow-hidden">
                    {/* Top subtle glow line */}
                    <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent"></div>
-                   
+
                    <div className="p-1">
-                      <AnimatePresence mode="wait">
-                        <motion.div
-                          key={activeTab}
-                          initial={{ opacity: 0, x: 10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -10 }}
-                          transition={{ duration: 0.2 }}
-                          className="p-6 sm:p-8"
-                        >
-                          {activeTab === "clone" ? (
-                            <VoiceCloningTab maxChars={maxChars} maxAudioDuration={maxAudioDuration} />
-                          ) : (
-                            <AIVoicesTab />
-                          )}
-                        </motion.div>
-                      </AnimatePresence>
+                      {/* Keep both tabs mounted to prevent audio from stopping */}
+                      <div className={cn("p-6 sm:p-8", activeTab !== "clone" && "hidden")}>
+                        <VoiceCloningTab maxChars={maxChars} maxAudioDuration={maxAudioDuration} />
+                      </div>
+                      <div className={cn("p-6 sm:p-8", activeTab !== "tts" && "hidden")}>
+                        <AIVoicesTab />
+                      </div>
                    </div>
                 </div>
              </motion.div>

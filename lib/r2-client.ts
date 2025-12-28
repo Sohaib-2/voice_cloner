@@ -24,13 +24,18 @@ export class R2Client {
    */
   async upload(key: string, data: Buffer | Blob, contentType: string = 'audio/mpeg'): Promise<boolean> {
     try {
+      // Convert Buffer to Uint8Array then to Blob for fetch API compatibility
+      const bodyData = data instanceof Buffer
+        ? new Blob([new Uint8Array(data)], { type: contentType })
+        : data;
+
       const response = await fetch(`${this.baseUrl}/objects/${key}`, {
         method: 'PUT',
         headers: {
           ...this.headers,
           'Content-Type': contentType,
         },
-        body: data,
+        body: bodyData,
       });
 
       return response.ok;
@@ -72,6 +77,35 @@ export class R2Client {
     // This assumes you have public access enabled or custom domain
     // Update this based on your R2 configuration
     return `https://pub-${CLOUDFLARE_ACCOUNT_ID}.r2.dev/${key}`;
+  }
+
+  /**
+   * Get a presigned URL for temporary access to a file
+   * @param key - The file path/key in R2
+   * @param expiresIn - Expiration time in seconds (default: 3600 = 1 hour)
+   */
+  async getPresignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
+    try {
+      // For R2, we'll use the download endpoint to get the file
+      // This creates a temporary download URL
+      const response = await fetch(`${this.baseUrl}/objects/${key}`, {
+        method: 'GET',
+        headers: this.headers,
+      });
+
+      if (response.ok) {
+        // Since we're downloading the file, we'll create a data URL
+        const blob = await response.blob();
+        return URL.createObjectURL(blob);
+      }
+
+      // Fallback to public URL if available
+      return this.getPublicUrl(key);
+    } catch (error) {
+      console.error('R2 Presigned URL Error:', error);
+      // Fallback to public URL
+      return this.getPublicUrl(key);
+    }
   }
 
   /**

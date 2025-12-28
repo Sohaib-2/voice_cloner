@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/d1-client";
+import { r2 } from "@/lib/r2-client";
+import { generateId } from "@/lib/db";
 
 const VOICE_INFO: Record<string, { gender: string; description: string }> = {
   // 🇺🇸 US English - Female
@@ -146,6 +148,9 @@ export async function POST(request: Request) {
       );
     }
 
+    // Get audio buffer first
+    const audioBuffer = Buffer.from(await deepinfraResponse.arrayBuffer());
+
     // Deduct TTS credits (admins still track usage but don't deplete credits)
     const newUsed = credits.used_tts_chars + charCount;
     const newRemaining = isAdmin ? credits.remaining_tts_chars : (credits.total_tts_chars - newUsed);
@@ -158,7 +163,43 @@ export async function POST(request: Request) {
        WHERE user_id = ?`
     ).bind(newUsed, newRemaining, Date.now(), session.userId).run();
 
-    const audioBuffer = Buffer.from(await deepinfraResponse.arrayBuffer());
+    // Save to R2 and database
+    const recordingId = generateId();
+    const r2Key = `recordings/${session.userId}/${recordingId}.${output_format || 'mp3'}`;
+    const now = Date.now();
+    const deleteAt = now + (12 * 60 * 60 * 1000); // 12 hours from now
+
+    try {
+      // Upload to R2
+      await r2.upload(r2Key, audioBuffer, `audio/${output_format || 'mp3'}`);
+
+      // Save to database
+      await db.prepare(
+        `INSERT INTO recordings (id, user_id, r2_key, duration, char_count, type, created_at, delete_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(recordingId, session.userId, r2Key, 0, charCount, 'tts', now, deleteAt).run();
+
+      // Delete old TTS recordings (keep only last 3)
+      const allRecordings = await db.prepare(
+        `SELECT id, r2_key FROM recordings
+         WHERE user_id = ? AND type = ?
+         ORDER BY created_at DESC`
+      ).bind(session.userId, 'tts').all();
+
+      if (allRecordings.results.length > 3) {
+        const toDelete = allRecordings.results.slice(3);
+        for (const rec of toDelete) {
+          // Delete from R2
+          await r2.delete(rec.r2_key);
+          // Delete from database
+          await db.prepare('DELETE FROM recordings WHERE id = ?').bind(rec.id).run();
+        }
+      }
+    } catch (saveError) {
+      console.error('Failed to save TTS recording:', saveError);
+      // Continue anyway - don't fail the generation
+    }
+
     const voiceId = voice || "af_bella";
     const voiceMetadata = VOICE_INFO[voiceId] || { gender: "Unknown", description: "No description available" };
 

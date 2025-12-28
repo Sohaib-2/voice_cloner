@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, Wand2, Download, Play, Pause, Volume2, Loader2, Sparkles, Check, Mic, Square, RotateCcw } from "lucide-react";
+import { Upload, Wand2, Download, Play, Pause, Volume2, Loader2, Sparkles, Check, Mic, Square, RotateCcw, Clock, Trash2 } from "lucide-react";
 import WaveSurfer from "wavesurfer.js";
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.js";
 import { toBase64, processAudioFile } from "@/lib/audioUtils";
@@ -33,6 +33,8 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
   const [isRecording, setIsRecording] = useState(false);
   const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [recentAudios, setRecentAudios] = useState<any[]>([]);
+  const [loadingRecordings, setLoadingRecordings] = useState(false);
 
   const refWaveformRef = useRef<HTMLDivElement>(null);
   const genWaveformRef = useRef<HTMLDivElement>(null);
@@ -44,6 +46,54 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const charCount = text.length;
+
+  // Fetch recent recordings
+  const fetchRecentAudios = async () => {
+    setLoadingRecordings(true);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const res = await fetch("/api/recordings?type=voice_clone", {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setRecentAudios(data.recordings || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch recordings:", error);
+    } finally {
+      setLoadingRecordings(false);
+    }
+  };
+
+  // Load recordings on mount and restore generated audio from localStorage
+  useEffect(() => {
+    fetchRecentAudios();
+
+    // Restore generated audio from localStorage
+    const savedAudio = localStorage.getItem('voiceClone_generatedAudio');
+    if (savedAudio) {
+      try {
+        const { audioSrc: savedSrc, duration, size, timestamp } = JSON.parse(savedAudio);
+        // Only restore if less than 1 hour old
+        if (Date.now() - timestamp < 3600000) {
+          setAudioSrc(savedSrc);
+          setGenAudioDuration(duration);
+          setGenAudioSize(size);
+        } else {
+          // Clear old data
+          localStorage.removeItem('voiceClone_generatedAudio');
+        }
+      } catch (err) {
+        console.error('Failed to restore audio:', err);
+      }
+    }
+  }, []);
 
   // Handle file upload
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -287,6 +337,14 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
         const sizeInBytes = Math.ceil((result.audio.length * 3) / 4);
         setGenAudioSize(sizeInBytes);
 
+        // Save to localStorage for persistence
+        localStorage.setItem('voiceClone_generatedAudio', JSON.stringify({
+          audioSrc: audioUrl,
+          duration: result.duration || 0,
+          size: sizeInBytes,
+          timestamp: Date.now()
+        }));
+
         // Update credits if returned
         if (result.creditsRemaining !== undefined) {
           try {
@@ -302,6 +360,9 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
             console.error('Failed to update credits:', err);
           }
         }
+
+        // Refresh recent audios
+        fetchRecentAudios();
       } else if (data.audio) {
         setProgress(100);
         const audioUrl = `data:audio/mp3;base64,${data.audio}`;
@@ -309,6 +370,14 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
         // Calculate file size from base64
         const sizeInBytes = Math.ceil((data.audio.length * 3) / 4);
         setGenAudioSize(sizeInBytes);
+
+        // Save to localStorage for persistence
+        localStorage.setItem('voiceClone_generatedAudio', JSON.stringify({
+          audioSrc: audioUrl,
+          duration: data.duration || 0,
+          size: sizeInBytes,
+          timestamp: Date.now()
+        }));
 
         // Update credits if returned
         if (data.creditsRemaining !== undefined) {
@@ -325,6 +394,9 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
             console.error('Failed to update credits:', err);
           }
         }
+
+        // Refresh recent audios
+        fetchRecentAudios();
       } else {
         throw new Error("Invalid response from server");
       }
@@ -360,6 +432,18 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
       wavesurfer.on("ready", () => {
         const duration = wavesurfer.getDuration();
         setGenAudioDuration(duration);
+
+        // Update localStorage with duration
+        const savedAudio = localStorage.getItem('voiceClone_generatedAudio');
+        if (savedAudio) {
+          try {
+            const data = JSON.parse(savedAudio);
+            data.duration = duration;
+            localStorage.setItem('voiceClone_generatedAudio', JSON.stringify(data));
+          } catch (err) {
+            console.error('Failed to update duration:', err);
+          }
+        }
       });
 
       wavesurfer.on("play", () => setIsGenPlaying(true));
@@ -715,6 +799,83 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Recent Audios Section */}
+      {recentAudios.length > 0 && (
+        <div className="relative animate-fadeIn">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <Clock className="w-5 h-5 text-purple-500" />
+                Recent Audios
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Your last 3 generated voice clones (auto-deleted after 12 hours)
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {recentAudios.map((audio, index) => (
+              <div
+                key={audio.id}
+                className="bg-card border border-border rounded-xl p-4 hover:border-purple-500/50 transition-all"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center">
+                      <Volume2 className="w-4 h-4 text-purple-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Voice Clone #{recentAudios.length - index}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(audio.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-xs text-muted-foreground mb-3">
+                  {audio.charCount} characters
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      const a = document.createElement('a');
+                      a.href = audio.url;
+                      a.download = `voice-clone-${audio.id}.mp3`;
+                      a.click();
+                    }}
+                  >
+                    <Download className="w-3 h-3 mr-1" />
+                    Download
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const audioPlayer = new Audio(audio.url);
+                      audioPlayer.play();
+                    }}
+                  >
+                    <Play className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {loadingRecordings && (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
         </div>
       )}
     </div>
