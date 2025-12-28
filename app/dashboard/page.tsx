@@ -59,8 +59,9 @@ export default function DashboardPage() {
   }
 
   const plan = PLANS[user.plan] || PLANS.starter;
+  const isAdmin = user.role === 'admin';
   const daysUntilExpiry = Math.ceil((user.planExpiresAt - Date.now()) / (24 * 60 * 60 * 1000));
-  const isPlanExpiringSoon = daysUntilExpiry <= 7;
+  const isPlanExpiringSoon = !isAdmin && daysUntilExpiry <= 7;
   const vcPercentage = (credits.voiceCloning.used / credits.voiceCloning.total) * 100;
   const ttsPercentage = (credits.tts.used / credits.tts.total) * 100;
 
@@ -106,6 +107,7 @@ export default function DashboardPage() {
                 <h2 className="text-2xl font-semibold">{user.username}</h2>
                 <p className="text-muted-foreground">
                   {plan.name} • Status: <span className="text-green-500">Active</span>
+                  {isAdmin && <span className="text-primary ml-2">(Admin)</span>}
                 </p>
               </div>
             </div>
@@ -114,12 +116,18 @@ export default function DashboardPage() {
                 <Calendar className="w-4 h-4" />
                 <span className="text-sm">Plan Expires:</span>
               </div>
-              <p className="text-lg font-semibold">
-                {new Date(user.planExpiresAt).toLocaleDateString()}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {daysUntilExpiry} days remaining
-              </p>
+              {isAdmin ? (
+                <p className="text-lg font-semibold text-green-500">NEVER</p>
+              ) : (
+                <>
+                  <p className="text-lg font-semibold">
+                    {new Date(user.planExpiresAt).toLocaleDateString()}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {daysUntilExpiry} days remaining
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -137,27 +145,36 @@ export default function DashboardPage() {
                 <span className="text-muted-foreground">Used:</span>
                 <span className="font-mono">{credits.voiceCloning.used.toLocaleString()} chars</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Remaining:</span>
-                <span className="font-mono text-primary">{credits.voiceCloning.remaining.toLocaleString()} chars</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Total:</span>
-                <span className="font-mono">{credits.voiceCloning.total.toLocaleString()} chars</span>
-              </div>
-              <div className="mt-4">
-                <div className="h-3 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all ${
-                      vcPercentage >= 90 ? 'bg-red-500' : vcPercentage >= 70 ? 'bg-amber-500' : 'bg-primary'
-                    }`}
-                    style={{ width: `${vcPercentage}%` }}
-                  />
+              {isAdmin ? (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Remaining:</span>
+                  <span className="font-mono text-primary font-semibold">UNLIMITED</span>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1 text-right">
-                  {vcPercentage.toFixed(1)}% used
-                </p>
-              </div>
+              ) : (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Remaining:</span>
+                    <span className="font-mono text-primary">{credits.voiceCloning.remaining.toLocaleString()} chars</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Total:</span>
+                    <span className="font-mono">{credits.voiceCloning.total.toLocaleString()} chars</span>
+                  </div>
+                  <div className="mt-4">
+                    <div className="h-3 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all ${
+                          vcPercentage >= 90 ? 'bg-red-500' : vcPercentage >= 70 ? 'bg-amber-500' : 'bg-primary'
+                        }`}
+                        style={{ width: `${vcPercentage}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 text-right">
+                      {vcPercentage.toFixed(1)}% used
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -172,27 +189,36 @@ export default function DashboardPage() {
                 <span className="text-muted-foreground">Used:</span>
                 <span className="font-mono">{credits.tts.used.toLocaleString()} chars</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Remaining:</span>
-                <span className="font-mono text-purple-500">{credits.tts.remaining.toLocaleString()} chars</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Total:</span>
-                <span className="font-mono">{credits.tts.total.toLocaleString()} chars</span>
-              </div>
-              <div className="mt-4">
-                <div className="h-3 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all ${
-                      ttsPercentage >= 90 ? 'bg-red-500' : ttsPercentage >= 70 ? 'bg-amber-500' : 'bg-purple-500'
-                    }`}
-                    style={{ width: `${ttsPercentage}%` }}
-                  />
+              {isAdmin ? (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Remaining:</span>
+                  <span className="font-mono text-purple-500 font-semibold">UNLIMITED</span>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1 text-right">
-                  {ttsPercentage.toFixed(1)}% used
-                </p>
-              </div>
+              ) : (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Remaining:</span>
+                    <span className="font-mono text-purple-500">{credits.tts.remaining.toLocaleString()} chars</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Total:</span>
+                    <span className="font-mono">{credits.tts.total.toLocaleString()} chars</span>
+                  </div>
+                  <div className="mt-4">
+                    <div className="h-3 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all ${
+                          ttsPercentage >= 90 ? 'bg-red-500' : ttsPercentage >= 70 ? 'bg-amber-500' : 'bg-purple-500'
+                        }`}
+                        style={{ width: `${ttsPercentage}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 text-right">
+                      {ttsPercentage.toFixed(1)}% used
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

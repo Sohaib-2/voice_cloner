@@ -342,55 +342,79 @@ export default function AdminPage() {
                         <p className="font-medium">{PLANS[user.current_plan]?.name || user.current_plan}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">Used:</span>
-                            <span>{(user.used_voice_cloning_chars / 1000).toFixed(0)}k</span>
+                        {user.role === 'admin' ? (
+                          <div className="space-y-1">
+                            <div className="text-xs text-primary font-semibold">UNLIMITED</div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">Used:</span>
+                              <span>{(user.used_voice_cloning_chars / 1000).toFixed(0)}k</span>
+                            </div>
                           </div>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">Remaining:</span>
-                            <span className="text-primary">{(user.remaining_voice_cloning_chars / 1000).toFixed(0)}k</span>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">Used:</span>
+                              <span>{(user.used_voice_cloning_chars / 1000).toFixed(0)}k</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">Remaining:</span>
+                              <span className="text-primary">{(user.remaining_voice_cloning_chars / 1000).toFixed(0)}k</span>
+                            </div>
+                            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${
+                                  vcPercentage >= 90 ? 'bg-red-500' : vcPercentage >= 70 ? 'bg-amber-500' : 'bg-primary'
+                                }`}
+                                style={{ width: `${vcPercentage}%` }}
+                              />
+                            </div>
                           </div>
-                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className={`h-full ${
-                                vcPercentage >= 90 ? 'bg-red-500' : vcPercentage >= 70 ? 'bg-amber-500' : 'bg-primary'
-                              }`}
-                              style={{ width: `${vcPercentage}%` }}
-                            />
-                          </div>
-                        </div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">Used:</span>
-                            <span>{(user.used_tts_chars / 1000).toFixed(0)}k</span>
+                        {user.role === 'admin' ? (
+                          <div className="space-y-1">
+                            <div className="text-xs text-purple-500 font-semibold">UNLIMITED</div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">Used:</span>
+                              <span>{(user.used_tts_chars / 1000).toFixed(0)}k</span>
+                            </div>
                           </div>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">Remaining:</span>
-                            <span className="text-purple-500">{(user.remaining_tts_chars / 1000).toFixed(0)}k</span>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">Used:</span>
+                              <span>{(user.used_tts_chars / 1000).toFixed(0)}k</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">Remaining:</span>
+                              <span className="text-purple-500">{(user.remaining_tts_chars / 1000).toFixed(0)}k</span>
+                            </div>
+                            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${
+                                  ttsPercentage >= 90 ? 'bg-red-500' : ttsPercentage >= 70 ? 'bg-amber-500' : 'bg-purple-500'
+                                }`}
+                                style={{ width: `${ttsPercentage}%` }}
+                              />
+                            </div>
                           </div>
-                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className={`h-full ${
-                                ttsPercentage >= 90 ? 'bg-red-500' : ttsPercentage >= 70 ? 'bg-amber-500' : 'bg-purple-500'
-                              }`}
-                              style={{ width: `${ttsPercentage}%` }}
-                            />
-                          </div>
-                        </div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <p className="text-sm">{(user.total_audio_duration / 60).toFixed(1)} min</p>
                       </td>
                       <td className="px-6 py-4">
-                        <div>
-                          <p className="text-sm">{new Date(user.plan_expires_at).toLocaleDateString()}</p>
-                          <p className={`text-xs ${daysUntilExpiry <= 7 ? 'text-amber-500' : 'text-muted-foreground'}`}>
-                            {daysUntilExpiry} days
-                          </p>
-                        </div>
+                        {user.role === 'admin' ? (
+                          <div className="text-xs text-green-500 font-semibold">NEVER</div>
+                        ) : (
+                          <div>
+                            <p className="text-sm">{new Date(user.plan_expires_at).toLocaleDateString()}</p>
+                            <p className={`text-xs ${daysUntilExpiry <= 7 ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                              {daysUntilExpiry} days
+                            </p>
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2">

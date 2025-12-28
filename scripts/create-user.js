@@ -7,7 +7,6 @@
 require('dotenv').config({ path: '.env.local' });
 
 const bcrypt = require('bcryptjs');
-const crypto = require('crypto');
 
 const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
 const CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
@@ -62,11 +61,12 @@ async function queryD1(sql, params = []) {
   return data.result?.[0] || { success: false, results: [] };
 }
 
-async function createUser(username, password, plan = 'pro') {
+async function createUser(username, password, plan = 'pro', role = 'user') {
   try {
     console.log('Creating user...');
     console.log('Username:', username);
     console.log('Plan:', plan);
+    console.log('Role:', role);
 
     // Check if user exists
     const existing = await queryD1(
@@ -84,16 +84,22 @@ async function createUser(username, password, plan = 'pro') {
     const userId = generateId();
     const now = Date.now();
     const planConfig = PLANS[plan];
-    const expiresAt = now + (30 * 24 * 60 * 60 * 1000); // 30 days
+
+    // Admin users have no expiry (set to far future)
+    const expiresAt = role === 'admin' ? now + (100 * 365 * 24 * 60 * 60 * 1000) : now + (30 * 24 * 60 * 60 * 1000);
 
     // Create user
     await queryD1(
-      `INSERT INTO users (id, username, password, status, current_plan, plan_started_at, plan_expires_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [userId, username, hashedPassword, 'active', plan, now, expiresAt, now]
+      `INSERT INTO users (id, username, password, status, current_plan, plan_started_at, plan_expires_at, created_at, role)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [userId, username, hashedPassword, 'active', plan, now, expiresAt, now, role]
     );
 
     console.log('✅ User created in database');
+
+    // Admin users get unlimited credits (set to very high number for tracking)
+    const voiceCloningChars = role === 'admin' ? 999999999 : planConfig.voiceCloningChars;
+    const ttsChars = role === 'admin' ? 999999999 : planConfig.ttsChars;
 
     // Create credits
     await queryD1(
@@ -104,10 +110,10 @@ async function createUser(username, password, plan = 'pro') {
       ) VALUES (?, ?, 0, ?, ?, 0, ?, 0, ?, ?, ?)`,
       [
         userId,
-        planConfig.voiceCloningChars,
-        planConfig.voiceCloningChars,
-        planConfig.ttsChars,
-        planConfig.ttsChars,
+        voiceCloningChars,
+        voiceCloningChars,
+        ttsChars,
+        ttsChars,
         now,
         expiresAt,
         now
@@ -119,10 +125,17 @@ async function createUser(username, password, plan = 'pro') {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log(`User ID: ${userId}`);
     console.log(`Username: ${username}`);
+    console.log(`Role: ${role}`);
     console.log(`Plan: ${planConfig.name}`);
-    console.log(`Voice Cloning Credits: ${planConfig.voiceCloningChars.toLocaleString()} chars`);
-    console.log(`TTS Credits: ${planConfig.ttsChars.toLocaleString()} chars`);
-    console.log(`Plan Expires: ${new Date(expiresAt).toLocaleDateString()}`);
+    if (role === 'admin') {
+      console.log(`Voice Cloning Credits: UNLIMITED (usage tracked)`);
+      console.log(`TTS Credits: UNLIMITED (usage tracked)`);
+      console.log(`Plan Expires: NEVER`);
+    } else {
+      console.log(`Voice Cloning Credits: ${planConfig.voiceCloningChars.toLocaleString()} chars`);
+      console.log(`TTS Credits: ${planConfig.ttsChars.toLocaleString()} chars`);
+      console.log(`Plan Expires: ${new Date(expiresAt).toLocaleDateString()}`);
+    }
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     console.log('✅ User created successfully!');
 

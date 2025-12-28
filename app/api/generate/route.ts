@@ -21,7 +21,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing text or audio" }, { status: 400 });
     }
 
-    // 2. Check user credits
+    // 2. Check user role and credits
+    const user = await db.prepare(
+      'SELECT role FROM users WHERE id = ?'
+    ).bind(session.userId).first();
+
     const credits = await db.prepare(
       'SELECT * FROM user_credits WHERE user_id = ?'
     ).bind(session.userId).first();
@@ -31,9 +35,10 @@ export async function POST(request: Request) {
     }
 
     const charCount = gen_text.length;
+    const isAdmin = user?.role === 'admin';
 
-    // Check if enough credits
-    if (credits.remaining_voice_cloning_chars < charCount) {
+    // Check if enough credits (skip for admin)
+    if (!isAdmin && credits.remaining_voice_cloning_chars < charCount) {
       return NextResponse.json({
         error: `Not enough credits. You need ${charCount} chars but only have ${credits.remaining_voice_cloning_chars} remaining.`
       }, { status: 403 });
