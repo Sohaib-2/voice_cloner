@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
         planStartedAt: user.plan_started_at,
         planExpiresAt: user.plan_expires_at
       },
-      credits: {
+      credits: credits ? {
         voiceCloning: {
           total: credits.total_voice_cloning_chars,
           used: credits.used_voice_cloning_chars,
@@ -85,6 +85,18 @@ export async function POST(request: NextRequest) {
           remaining: credits.remaining_tts_chars
         },
         totalAudioDuration: credits.total_audio_duration
+      } : {
+        voiceCloning: {
+          total: 0,
+          used: 0,
+          remaining: 0
+        },
+        tts: {
+          total: 0,
+          used: 0,
+          remaining: 0
+        },
+        totalAudioDuration: 0
       }
     });
 
