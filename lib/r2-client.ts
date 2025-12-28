@@ -4,6 +4,7 @@
 const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || '';
 const CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN || '';
 const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || '';
+const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || '';
 
 export class R2Client {
   private baseUrl: string;
@@ -64,48 +65,29 @@ export class R2Client {
   }
 
   /**
-   * Get file URL (for downloading/playing)
-   * Note: R2 doesn't provide public URLs via REST API by default
-   * You need to either:
-   * 1. Enable public access on the bucket
-   * 2. Use presigned URLs
-   * 3. Use a custom domain
-   *
-   * For now, we'll return the object key and handle it differently
+   * Get public URL for a file
+   * Requires R2 bucket to have public R2.dev subdomain enabled
+   * @param key - The file path/key in R2
    */
   getPublicUrl(key: string): string {
-    // This assumes you have public access enabled or custom domain
-    // Update this based on your R2 configuration
-    return `https://pub-${CLOUDFLARE_ACCOUNT_ID}.r2.dev/${key}`;
+    if (!R2_PUBLIC_URL) {
+      console.warn('R2_PUBLIC_URL not configured. Please enable R2.dev subdomain in Cloudflare dashboard.');
+      return '';
+    }
+    // Remove trailing slash from R2_PUBLIC_URL if present
+    const baseUrl = R2_PUBLIC_URL.replace(/\/$/, '');
+    return `${baseUrl}/${key}`;
   }
 
   /**
-   * Get a presigned URL for temporary access to a file
+   * Get a public URL for a file (no presigned URL needed with public R2.dev subdomain)
    * @param key - The file path/key in R2
-   * @param expiresIn - Expiration time in seconds (default: 3600 = 1 hour)
+   * @param expiresIn - Not used, kept for API compatibility (files are public)
    */
   async getPresignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
-    try {
-      // For R2, we'll use the download endpoint to get the file
-      // This creates a temporary download URL
-      const response = await fetch(`${this.baseUrl}/objects/${key}`, {
-        method: 'GET',
-        headers: this.headers,
-      });
-
-      if (response.ok) {
-        // Since we're downloading the file, we'll create a data URL
-        const blob = await response.blob();
-        return URL.createObjectURL(blob);
-      }
-
-      // Fallback to public URL if available
-      return this.getPublicUrl(key);
-    } catch (error) {
-      console.error('R2 Presigned URL Error:', error);
-      // Fallback to public URL
-      return this.getPublicUrl(key);
-    }
+    // With public R2.dev subdomain enabled, we just return the public URL
+    // No need for presigned URLs or blob URLs
+    return this.getPublicUrl(key);
   }
 
   /**
