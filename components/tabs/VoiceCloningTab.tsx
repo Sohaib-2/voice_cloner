@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, Wand2, Download, Play, Pause, Volume2, Loader2, Sparkles, Check } from "lucide-react";
+import { Upload, Wand2, Download, Play, Pause, Volume2, Loader2, Sparkles, Check, Mic, Square, RotateCcw } from "lucide-react";
 import WaveSurfer from "wavesurfer.js";
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.js";
 import { toBase64, processAudioFile } from "@/lib/audioUtils";
@@ -29,6 +29,10 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
   const [genAudioSize, setGenAudioSize] = useState(0);
   const [jobStatus, setJobStatus] = useState<string>("");
   const [queueTime, setQueueTime] = useState<number>(0);
+  const [inputMode, setInputMode] = useState<"upload" | "record">("upload");
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
+  const [recordingTime, setRecordingTime] = useState(0);
 
   const refWaveformRef = useRef<HTMLDivElement>(null);
   const genWaveformRef = useRef<HTMLDivElement>(null);
@@ -36,6 +40,8 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
   const genWavesurferRef = useRef<WaveSurfer | null>(null);
   const regionsPluginRef = useRef<RegionsPlugin | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const charCount = text.length;
 
@@ -53,6 +59,74 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
     } catch (error) {
       alert("Failed to load audio file. Please try a different file.");
       e.target.value = "";
+    }
+  };
+
+  // Start recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      const chunks: Blob[] = [];
+      setRecordedChunks([]);
+      setRecordingTime(0);
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: "audio/webm" });
+        const file = new File([blob], "recorded-audio.webm", { type: "audio/webm" });
+
+        if (refWavesurferRef.current) {
+          refWavesurferRef.current.destroy();
+          refWavesurferRef.current = null;
+        }
+        setFile(file);
+
+        stream.getTracks().forEach(track => track.stop());
+        if (recordingIntervalRef.current) {
+          clearInterval(recordingIntervalRef.current);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => {
+          if (prev >= maxAudioDuration) {
+            stopRecording();
+            return prev;
+          }
+          return prev + 0.1;
+        });
+      }, 100);
+    } catch (error) {
+      alert("Could not access microphone. Please grant permission and try again.");
+    }
+  };
+
+  // Stop recording
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  // Re-record
+  const reRecord = () => {
+    setFile(null);
+    setRecordingTime(0);
+    if (refWavesurferRef.current) {
+      refWavesurferRef.current.destroy();
+      refWavesurferRef.current = null;
     }
   };
 
@@ -274,7 +348,7 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
               Reference Voice
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Upload and trim your voice sample (max {maxAudioDuration}s)
+              {inputMode === "upload" ? `Upload and trim your voice sample (max ${maxAudioDuration}s)` : `Record your voice directly (max ${maxAudioDuration}s)`}
             </p>
           </div>
 
@@ -298,6 +372,36 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
           )}
         </div>
 
+        {/* Mode Toggle */}
+        {!file && !isRecording && (
+          <div className="flex justify-center mb-6">
+            <div className="inline-flex bg-muted rounded-xl p-1">
+              <button
+                onClick={() => setInputMode("upload")}
+                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${
+                  inputMode === "upload"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Upload className="w-4 h-4 inline mr-2" />
+                Upload
+              </button>
+              <button
+                onClick={() => setInputMode("record")}
+                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${
+                  inputMode === "record"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Mic className="w-4 h-4 inline mr-2" />
+                Record
+              </button>
+            </div>
+          </div>
+        )}
+
         <input
           ref={fileInputRef}
           type="file"
@@ -306,19 +410,58 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
           className="hidden"
         />
 
-        {!file ? (
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full h-48 border-2 border-dashed border-border rounded-2xl hover:border-primary/50 transition-all duration-300 flex flex-col items-center justify-center gap-4 bg-card hover:bg-accent/50 group"
-          >
-            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Upload className="w-10 h-10 text-primary" />
+        {!file && !isRecording ? (
+          inputMode === "upload" ? (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full h-48 border-2 border-dashed border-border rounded-2xl hover:border-primary/50 transition-all duration-300 flex flex-col items-center justify-center gap-4 bg-card hover:bg-accent/50 group"
+            >
+              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Upload className="w-10 h-10 text-primary" />
+              </div>
+              <div className="text-center">
+                <p className="font-medium text-lg">Drop your audio file here</p>
+                <p className="text-sm text-muted-foreground mt-1">or click to browse • WAV, MP3, or any audio format</p>
+              </div>
+            </button>
+          ) : (
+            <div className="w-full h-48 border-2 border-dashed border-border rounded-2xl flex flex-col items-center justify-center gap-4 bg-card">
+              <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center">
+                <Mic className="w-10 h-10 text-red-500" />
+              </div>
+              <div className="text-center">
+                <p className="font-medium text-lg">Ready to record</p>
+                <p className="text-sm text-muted-foreground mt-1">Click the button below to start recording</p>
+              </div>
+              <Button
+                onClick={startRecording}
+                size="lg"
+                className="bg-red-500 hover:bg-red-600 text-white"
+              >
+                <Mic className="w-5 h-5 mr-2" />
+                Start Recording
+              </Button>
+            </div>
+          )
+        ) : isRecording ? (
+          <div className="w-full h-48 border-2 border-red-500 rounded-2xl flex flex-col items-center justify-center gap-4 bg-card animate-pulse">
+            <div className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center animate-pulse">
+              <Mic className="w-10 h-10 text-white" />
             </div>
             <div className="text-center">
-              <p className="font-medium text-lg">Drop your audio file here</p>
-              <p className="text-sm text-muted-foreground mt-1">or click to browse • WAV, MP3, or any audio format</p>
+              <p className="font-medium text-lg text-red-500">Recording...</p>
+              <p className="text-2xl font-mono font-bold mt-2">{recordingTime.toFixed(1)}s / {maxAudioDuration}s</p>
             </div>
-          </button>
+            <Button
+              onClick={stopRecording}
+              size="lg"
+              variant="outline"
+              className="border-red-500 text-red-500 hover:bg-red-50"
+            >
+              <Square className="w-5 h-5 mr-2" />
+              Stop Recording
+            </Button>
+          </div>
         ) : (
           <div className="space-y-4 animate-fadeIn">
             <div className="bg-card border border-border rounded-2xl p-6">
@@ -339,18 +482,30 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
                     </p>
                   </div>
                 </div>
-                <Button
-                  onClick={() => {
-                    setFile(null);
-                    setIsRefPlaying(false);
-                    if (refWavesurferRef.current) refWavesurferRef.current.destroy();
-                    if (fileInputRef.current) fileInputRef.current.value = "";
-                  }}
-                  variant="outline"
-                  size="sm"
-                >
-                  Change
-                </Button>
+                <div className="flex gap-2">
+                  {inputMode === "record" && (
+                    <Button
+                      onClick={reRecord}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                      Re-record
+                    </Button>
+                  )}
+                  <Button
+                    onClick={() => {
+                      setFile(null);
+                      setIsRefPlaying(false);
+                      if (refWavesurferRef.current) refWavesurferRef.current.destroy();
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Change
+                  </Button>
+                </div>
               </div>
 
               <div className="bg-muted/50 rounded-xl p-4 mb-4">
