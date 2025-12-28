@@ -62,29 +62,29 @@ export interface Plan {
 export const PLANS: Record<string, Plan> = {
   starter: {
     name: "Starter Pack",
-    voiceCloningChars: 100000,    // 100K chars/month
-    ttsChars: 100000,
+    voiceCloningChars: 1000000,    // 1M chars/month
+    ttsChars: 1000000,
     price: 9.99,
     maxAudioDuration: 15          // 15 seconds max
   },
   basic: {
     name: "Basic Pack",
-    voiceCloningChars: 500000,    // 500K chars/month
-    ttsChars: 500000,
+    voiceCloningChars: 3000000,    // 3M chars/month
+    ttsChars: 3000000,
     price: 29.99,
     maxAudioDuration: 30
   },
   pro: {
     name: "Pro Pack",
-    voiceCloningChars: 1000000,   // 1M chars/month
-    ttsChars: 1000000,
+    voiceCloningChars: 5000000,   // 5M chars/month
+    ttsChars: 5000000,
     price: 49.99,
     maxAudioDuration: 30
   },
   enterprise: {
     name: "Enterprise Pack",
-    voiceCloningChars: 5000000,   // 5M chars/month
-    ttsChars: 5000000,
+    voiceCloningChars: 10000000,   // 10M chars/month
+    ttsChars: 10000000,
     price: 199.99,
     maxAudioDuration: 60
   }

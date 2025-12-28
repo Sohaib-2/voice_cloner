@@ -35,8 +35,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if plan expired
-    if (Date.now() > user.plan_expires_at) {
+    // Check if plan expired (skip for admin)
+    if (user.role !== 'admin' && Date.now() > user.plan_expires_at) {
       return NextResponse.json(
         { error: 'Your plan has expired. Please renew your subscription.' },
         { status: 403 }
@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
         username: user.username,
         plan: user.current_plan,
         status: user.status,
+        role: user.role,
         planStartedAt: user.plan_started_at,
         planExpiresAt: user.plan_expires_at
       },

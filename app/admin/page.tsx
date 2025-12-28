@@ -426,30 +426,34 @@ export default function AdminPage() {
                           >
                             <Edit2 className="w-3 h-3" />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleRenewPlan(user.id, user.current_plan)}
-                            title="Renew plan for 30 days"
-                          >
-                            <RefreshCw className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleToggleStatus(user.id)}
-                            title={user.status === 'active' ? 'Deactivate' : 'Activate'}
-                          >
-                            {user.status === 'active' ? <X className="w-3 h-3" /> : <Check className="w-3 h-3" />}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => handleDeleteUser(user.id, user.username)}
-                            title="Delete user"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
+                          {user.role !== 'admin' && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRenewPlan(user.id, user.current_plan)}
+                                title="Renew plan for 30 days"
+                              >
+                                <RefreshCw className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleToggleStatus(user.id)}
+                                title={user.status === 'active' ? 'Deactivate' : 'Activate'}
+                              >
+                                {user.status === 'active' ? <X className="w-3 h-3" /> : <Check className="w-3 h-3" />}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleDeleteUser(user.id, user.username)}
+                                title="Delete user"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>

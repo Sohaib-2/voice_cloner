@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { verifyToken } from '@/lib/auth';
 import { db } from '@/lib/d1-client';
 import { r2 } from '@/lib/r2-client';
 import { PLANS } from '@/lib/types';
 
 // Check if user is admin
 async function isAdmin(request: Request) {
-  const session = await getSession(request);
+  // Get token from cookie
+  const cookieHeader = request.headers.get('cookie');
+  if (!cookieHeader) return false;
+
+  const tokenMatch = cookieHeader.match(/token=([^;]+)/);
+  if (!tokenMatch) return false;
+
+  const session = await verifyToken(tokenMatch[1]);
   if (!session) return false;
 
   const user = await db.prepare('SELECT role FROM users WHERE id = ?').bind(session.userId).first();
@@ -24,6 +31,12 @@ export async function DELETE(
     }
 
     const { userId } = params;
+
+    // Prevent deleting admin users
+    const userToDelete = await db.prepare('SELECT role FROM users WHERE id = ?').bind(userId).first();
+    if (userToDelete?.role === 'admin') {
+      return NextResponse.json({ error: 'Cannot delete admin users' }, { status: 403 });
+    }
 
     // Get all recordings for this user
     const recordings = await db.prepare(
