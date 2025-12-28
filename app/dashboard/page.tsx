@@ -22,14 +22,65 @@ export default function DashboardPage() {
 
     // Load user data from localStorage
     const userData = localStorage.getItem("user");
-    const creditsData = localStorage.getItem("credits");
-
-    if (userData && creditsData) {
+    if (userData) {
       setUser(JSON.parse(userData));
-      setCredits(JSON.parse(creditsData));
     }
 
-    setLoading(false);
+    // Fetch fresh credits from API
+    const fetchCredits = async () => {
+      try {
+        const response = await fetch("/api/credits", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setCredits(data.credits);
+          // Update localStorage with fresh data
+          localStorage.setItem("credits", JSON.stringify(data.credits));
+        } else {
+          // Fallback to localStorage if API fails
+          const creditsData = localStorage.getItem("credits");
+          if (creditsData) {
+            setCredits(JSON.parse(creditsData));
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch credits:", error);
+        // Fallback to localStorage if API fails
+        const creditsData = localStorage.getItem("credits");
+        if (creditsData) {
+          setCredits(JSON.parse(creditsData));
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCredits();
+
+    // Listen for credit updates from other components
+    const handleCreditsUpdate = (event: CustomEvent) => {
+      setCredits(event.detail);
+    };
+
+    window.addEventListener("creditsUpdated", handleCreditsUpdate as EventListener);
+
+    // Refresh credits when tab becomes visible
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchCredits();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("creditsUpdated", handleCreditsUpdate as EventListener);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [router]);
 
   const handleLogout = async () => {

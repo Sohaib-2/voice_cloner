@@ -294,6 +294,7 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
             if (creditsData) {
               const credits = JSON.parse(creditsData);
               credits.voiceCloning.remaining = result.creditsRemaining;
+              credits.voiceCloning.used = credits.voiceCloning.total - result.creditsRemaining;
               localStorage.setItem('credits', JSON.stringify(credits));
               window.dispatchEvent(new CustomEvent('creditsUpdated', { detail: credits }));
             }
@@ -316,6 +317,7 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
             if (creditsData) {
               const credits = JSON.parse(creditsData);
               credits.voiceCloning.remaining = data.creditsRemaining;
+              credits.voiceCloning.used = credits.voiceCloning.total - data.creditsRemaining;
               localStorage.setItem('credits', JSON.stringify(credits));
               window.dispatchEvent(new CustomEvent('creditsUpdated', { detail: credits }));
             }

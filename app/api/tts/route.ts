@@ -112,6 +112,16 @@ export async function POST(request: Request) {
     const charCount = text.length;
     const isAdmin = user?.role === 'admin';
 
+    console.log('TTS Request - User Info:', {
+      userId: session.userId,
+      role: user?.role,
+      isAdmin,
+      charCount,
+      currentUsed: credits.used_tts_chars,
+      currentRemaining: credits.remaining_tts_chars,
+      total: credits.total_tts_chars
+    });
+
     // Check if enough credits (skip for admin)
     if (!isAdmin && credits.remaining_tts_chars < charCount) {
       return NextResponse.json({
@@ -146,23 +156,52 @@ export async function POST(request: Request) {
       );
     }
 
-    // Deduct TTS credits (skip for admin)
-    if (!isAdmin) {
-      const newUsed = credits.used_tts_chars + charCount;
-      const newRemaining = credits.total_tts_chars - newUsed;
+    // Deduct TTS credits (admins still track usage but don't deplete credits)
+    const newUsed = credits.used_tts_chars + charCount;
+    const newRemaining = isAdmin ? credits.remaining_tts_chars : (credits.total_tts_chars - newUsed);
 
-      await db.prepare(
+    try {
+      const updateResult = await db.prepare(
         `UPDATE user_credits
          SET used_tts_chars = ?,
              remaining_tts_chars = ?,
              last_updated = ?
          WHERE user_id = ?`
       ).bind(newUsed, newRemaining, Date.now(), session.userId).run();
+
+      console.log('TTS credits update result:', {
+        userId: session.userId,
+        charCount,
+        isAdmin,
+        oldUsed: credits.used_tts_chars,
+        newUsed,
+        oldRemaining: credits.remaining_tts_chars,
+        newRemaining,
+        updateResult
+      });
+
+      if (!updateResult.success) {
+        console.error('Failed to update TTS credits in database:', updateResult.errors);
+        // Still continue to return the audio, but log the error
+      } else {
+        // Verify the update by reading back from DB
+        const verifyCredits = await db.prepare(
+          'SELECT used_tts_chars, remaining_tts_chars FROM user_credits WHERE user_id = ?'
+        ).bind(session.userId).first();
+        console.log('TTS credits after update (verified from DB):', verifyCredits);
+      }
+    } catch (dbError) {
+      console.error('Error updating TTS credits:', dbError);
+      // Still continue to return the audio, but log the error
     }
 
     const audioBuffer = Buffer.from(await deepinfraResponse.arrayBuffer());
     const voiceId = voice || "af_bella";
     const voiceMetadata = VOICE_INFO[voiceId] || { gender: "Unknown", description: "No description available" };
+
+    // Calculate the new remaining credits for the header
+    const newUsedForHeader = isAdmin ? 0 : (credits.used_tts_chars + charCount);
+    const newRemainingForHeader = isAdmin ? 'unlimited' : (credits.total_tts_chars - newUsedForHeader).toString();
 
     return new NextResponse(audioBuffer, {
       status: 200,
@@ -172,7 +211,7 @@ export async function POST(request: Request) {
         'X-Voice-Id': voiceId,
         'X-Voice-Gender': voiceMetadata.gender,
         'X-Voice-Description': encodeURIComponent(voiceMetadata.description),
-        'X-Credits-Remaining': (!isAdmin ? (credits.total_tts_chars - (credits.used_tts_chars + charCount)).toString() : 'unlimited'),
+        'X-Credits-Remaining': newRemainingForHeader,
       },
     });
 

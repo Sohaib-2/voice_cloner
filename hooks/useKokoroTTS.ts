@@ -140,7 +140,12 @@ export function useKokoroTTS(): UseKokoroTTSReturn {
           const creditsData = localStorage.getItem('credits');
           if (creditsData) {
             const credits = JSON.parse(creditsData);
+            const charCount = text.length;
+
+            // Update both remaining and used credits
             credits.tts.remaining = parseInt(creditsRemaining);
+            credits.tts.used = credits.tts.total - parseInt(creditsRemaining);
+
             localStorage.setItem('credits', JSON.stringify(credits));
 
             // Dispatch event to notify other components
