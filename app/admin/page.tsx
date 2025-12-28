@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { LogOut, Plus, Trash2, RefreshCw, Edit2, X, Check, User } from "lucide-react";
+import { LogOut, Plus, Trash2, RefreshCw, Edit2, X, Check, User, Eye } from "lucide-react";
 import { PLANS } from "@/lib/types";
 
 interface UserWithCredits {
@@ -32,6 +32,7 @@ export default function AdminPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserWithCredits | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   // Create user form
   const [newUsername, setNewUsername] = useState("");
@@ -184,6 +185,11 @@ export default function AdminPage() {
     setEditVoiceCloning(user.total_voice_cloning_chars.toString());
     setEditTts(user.total_tts_chars.toString());
     setShowEditModal(true);
+  };
+
+  const openDetailsModal = (user: UserWithCredits) => {
+    setSelectedUser(user);
+    setShowDetailsModal(true);
   };
 
   const handleLogout = async () => {
@@ -432,6 +438,14 @@ export default function AdminPage() {
                           <Button
                             size="sm"
                             variant="outline"
+                            onClick={() => openDetailsModal(user)}
+                            title="View user details"
+                          >
+                            <Eye className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
                             onClick={() => openEditModal(user)}
                             title="Edit credits"
                           >
@@ -474,6 +488,210 @@ export default function AdminPage() {
             </table>
           </div>
         </div>
+
+        {/* User Details Modal */}
+        {showDetailsModal && selectedUser && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-card border border-border rounded-2xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-semibold">User Details</h2>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowDetailsModal(false)}
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+
+              <div className="space-y-6">
+                {/* User Info Section */}
+                <div className="bg-muted/30 rounded-xl p-4">
+                  <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                    <User className="w-5 h-5 text-primary" />
+                    User Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Username</p>
+                      <p className="font-medium">{selectedUser.username}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">User ID</p>
+                      <p className="font-mono text-sm">{selectedUser.id}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Role</p>
+                      <p className="font-medium capitalize">{selectedUser.role}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Status</p>
+                      <span
+                        className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                          selectedUser.status === "active"
+                            ? "bg-green-500/10 text-green-500"
+                            : "bg-red-500/10 text-red-500"
+                        }`}
+                      >
+                        {selectedUser.status}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Account Created</p>
+                      <p className="font-medium">{new Date(selectedUser.created_at).toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Plan Details Section */}
+                <div className="bg-muted/30 rounded-xl p-4">
+                  <h3 className="text-lg font-semibold mb-3">Plan Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Current Plan</p>
+                      <p className="font-medium text-primary">{PLANS[selectedUser.current_plan]?.name || selectedUser.current_plan}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Plan Started</p>
+                      <p className="font-medium">{new Date(selectedUser.plan_started_at).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Plan Expires</p>
+                      {selectedUser.role === 'admin' ? (
+                        <p className="font-medium text-green-500">Never (Admin)</p>
+                      ) : (
+                        <div>
+                          <p className="font-medium">{new Date(selectedUser.plan_expires_at).toLocaleDateString()}</p>
+                          <p className="text-xs text-muted-foreground">
+                            ({Math.ceil((selectedUser.plan_expires_at - Date.now()) / (24 * 60 * 60 * 1000))} days remaining)
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Voice Cloning Credits */}
+                <div className="bg-muted/30 rounded-xl p-4">
+                  <h3 className="text-lg font-semibold mb-3">Voice Cloning Credits</h3>
+                  {selectedUser.role === 'admin' ? (
+                    <div className="space-y-2">
+                      <p className="text-primary font-semibold">UNLIMITED ACCESS</p>
+                      <div className="grid grid-cols-1 gap-2">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Used</p>
+                          <p className="font-medium">{(selectedUser.used_voice_cloning_chars / 1000).toFixed(2)}k characters</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Total</p>
+                          <p className="font-medium">{(selectedUser.total_voice_cloning_chars / 1000).toFixed(2)}k characters</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Used</p>
+                          <p className="font-medium">{(selectedUser.used_voice_cloning_chars / 1000).toFixed(2)}k characters</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Remaining</p>
+                          <p className="font-medium text-primary">{(selectedUser.remaining_voice_cloning_chars / 1000).toFixed(2)}k characters</p>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span>Usage</span>
+                          <span>{((selectedUser.used_voice_cloning_chars / selectedUser.total_voice_cloning_chars) * 100).toFixed(1)}%</span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all ${
+                              (selectedUser.used_voice_cloning_chars / selectedUser.total_voice_cloning_chars) * 100 >= 90
+                                ? 'bg-red-500'
+                                : (selectedUser.used_voice_cloning_chars / selectedUser.total_voice_cloning_chars) * 100 >= 70
+                                ? 'bg-amber-500'
+                                : 'bg-primary'
+                            }`}
+                            style={{ width: `${(selectedUser.used_voice_cloning_chars / selectedUser.total_voice_cloning_chars) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* TTS Credits */}
+                <div className="bg-muted/30 rounded-xl p-4">
+                  <h3 className="text-lg font-semibold mb-3">Text-to-Speech Credits</h3>
+                  {selectedUser.role === 'admin' ? (
+                    <div className="space-y-2">
+                      <p className="text-purple-500 font-semibold">UNLIMITED ACCESS</p>
+                      <div className="grid grid-cols-1 gap-2">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Used</p>
+                          <p className="font-medium">{(selectedUser.used_tts_chars / 1000).toFixed(2)}k characters</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Total</p>
+                          <p className="font-medium">{(selectedUser.total_tts_chars / 1000).toFixed(2)}k characters</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Used</p>
+                          <p className="font-medium">{(selectedUser.used_tts_chars / 1000).toFixed(2)}k characters</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Remaining</p>
+                          <p className="font-medium text-purple-500">{(selectedUser.remaining_tts_chars / 1000).toFixed(2)}k characters</p>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span>Usage</span>
+                          <span>{((selectedUser.used_tts_chars / selectedUser.total_tts_chars) * 100).toFixed(1)}%</span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all ${
+                              (selectedUser.used_tts_chars / selectedUser.total_tts_chars) * 100 >= 90
+                                ? 'bg-red-500'
+                                : (selectedUser.used_tts_chars / selectedUser.total_tts_chars) * 100 >= 70
+                                ? 'bg-amber-500'
+                                : 'bg-purple-500'
+                            }`}
+                            style={{ width: `${(selectedUser.used_tts_chars / selectedUser.total_tts_chars) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Audio Usage */}
+                <div className="bg-muted/30 rounded-xl p-4">
+                  <h3 className="text-lg font-semibold mb-3">Audio Usage</h3>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Audio Duration</p>
+                    <p className="font-medium text-lg">{(selectedUser.total_audio_duration / 60).toFixed(2)} minutes</p>
+                    <p className="text-xs text-muted-foreground mt-1">({selectedUser.total_audio_duration.toFixed(0)} seconds)</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <Button onClick={() => setShowDetailsModal(false)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Edit Modal */}
         {showEditModal && selectedUser && (
