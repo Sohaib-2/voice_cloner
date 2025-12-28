@@ -286,6 +286,21 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
         // Calculate file size from base64
         const sizeInBytes = Math.ceil((result.audio.length * 3) / 4);
         setGenAudioSize(sizeInBytes);
+
+        // Update credits if returned
+        if (result.creditsRemaining !== undefined) {
+          try {
+            const creditsData = localStorage.getItem('credits');
+            if (creditsData) {
+              const credits = JSON.parse(creditsData);
+              credits.voiceCloning.remaining = result.creditsRemaining;
+              localStorage.setItem('credits', JSON.stringify(credits));
+              window.dispatchEvent(new CustomEvent('creditsUpdated', { detail: credits }));
+            }
+          } catch (err) {
+            console.error('Failed to update credits:', err);
+          }
+        }
       } else if (data.audio) {
         setProgress(100);
         const audioUrl = `data:audio/mp3;base64,${data.audio}`;
@@ -293,6 +308,21 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
         // Calculate file size from base64
         const sizeInBytes = Math.ceil((data.audio.length * 3) / 4);
         setGenAudioSize(sizeInBytes);
+
+        // Update credits if returned
+        if (data.creditsRemaining !== undefined) {
+          try {
+            const creditsData = localStorage.getItem('credits');
+            if (creditsData) {
+              const credits = JSON.parse(creditsData);
+              credits.voiceCloning.remaining = data.creditsRemaining;
+              localStorage.setItem('credits', JSON.stringify(credits));
+              window.dispatchEvent(new CustomEvent('creditsUpdated', { detail: credits }));
+            }
+          } catch (err) {
+            console.error('Failed to update credits:', err);
+          }
+        }
       } else {
         throw new Error("Invalid response from server");
       }

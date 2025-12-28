@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { db } from "@/lib/d1-client";
+import { r2 } from "@/lib/r2-client";
 
 export async function POST(request: Request) {
   try {
@@ -31,12 +33,112 @@ export async function POST(request: Request) {
 
     // Return the status to frontend
     if (data.status === "COMPLETED") {
+      // Deduct credits for async job completion
+      try {
+        // Get job metadata from database
+        const jobRecord = await db.prepare(
+          'SELECT * FROM recordings WHERE id = ? AND user_id = ?'
+        ).bind(jobId, session.userId).first();
+
+        if (jobRecord && jobRecord.type === 'voice_clone_pending') {
+          const charCount = jobRecord.char_count;
+          const audioDuration = data.output.duration_sec || 0;
+
+          // Get user role and credits
+          const user = await db.prepare(
+            'SELECT role FROM users WHERE id = ?'
+          ).bind(session.userId).first();
+
+          const credits = await db.prepare(
+            'SELECT * FROM user_credits WHERE user_id = ?'
+          ).bind(session.userId).first();
+
+          const isAdmin = user?.role === 'admin';
+
+          // Deduct credits (skip for admin)
+          if (!isAdmin && credits) {
+            const newUsed = credits.used_voice_cloning_chars + charCount;
+            const newRemaining = credits.total_voice_cloning_chars - newUsed;
+
+            await db.prepare(
+              `UPDATE user_credits
+               SET used_voice_cloning_chars = ?,
+                   remaining_voice_cloning_chars = ?,
+                   total_audio_duration = total_audio_duration + ?,
+                   last_updated = ?
+               WHERE user_id = ?`
+            ).bind(newUsed, newRemaining, audioDuration, Date.now(), session.userId).run();
+          }
+
+          // Save audio to R2 and update database
+          const r2Key = `recordings/${session.userId}/${jobId}.mp3`;
+          const now = Date.now();
+          const deleteAt = now + (12 * 60 * 60 * 1000); // 12 hours from now
+
+          try {
+            // Convert base64 to buffer
+            const audioBuffer = Buffer.from(data.output.audio, 'base64');
+
+            // Upload to R2
+            await r2.upload(r2Key, audioBuffer, 'audio/mpeg');
+
+            // Update recording in database
+            await db.prepare(
+              `UPDATE recordings
+               SET r2_key = ?, duration = ?, type = ?, delete_at = ?
+               WHERE id = ? AND user_id = ?`
+            ).bind(r2Key, audioDuration, 'voice_clone', deleteAt, jobId, session.userId).run();
+
+            // Delete old recordings (keep only last 3)
+            const allRecordings = await db.prepare(
+              `SELECT id, r2_key FROM recordings
+               WHERE user_id = ? AND type = ?
+               ORDER BY created_at DESC`
+            ).bind(session.userId, 'voice_clone').all();
+
+            if (allRecordings.results.length > 3) {
+              const toDelete = allRecordings.results.slice(3);
+              for (const rec of toDelete) {
+                await r2.delete(rec.r2_key);
+                await db.prepare('DELETE FROM recordings WHERE id = ?').bind(rec.id).run();
+              }
+            }
+          } catch (saveError) {
+            console.error('Failed to save recording:', saveError);
+          }
+
+          // Get updated credits to return
+          const updatedCredits = await db.prepare(
+            'SELECT remaining_voice_cloning_chars FROM user_credits WHERE user_id = ?'
+          ).bind(session.userId).first();
+
+          return NextResponse.json({
+            status: "COMPLETED",
+            audio: data.output.audio,
+            duration: data.output.duration_sec,
+            creditsRemaining: updatedCredits?.remaining_voice_cloning_chars || 0
+          });
+        }
+      } catch (creditError) {
+        console.error('Failed to deduct credits for async job:', creditError);
+        // Continue anyway and return the audio
+      }
+
       return NextResponse.json({
         status: "COMPLETED",
         audio: data.output.audio,
         duration: data.output.duration_sec
       });
     } else if (data.status === "FAILED") {
+      // Clean up pending job record if it exists
+      try {
+        await db.prepare(
+          'DELETE FROM recordings WHERE id = ? AND user_id = ? AND type = ?'
+        ).bind(jobId, session.userId, 'voice_clone_pending').run();
+      } catch (cleanupError) {
+        console.error('Failed to cleanup failed job:', cleanupError);
+      }
+
       return NextResponse.json({
         status: "FAILED",
         error: data.error || "Job failed"

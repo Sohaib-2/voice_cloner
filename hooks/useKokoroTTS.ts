@@ -133,6 +133,24 @@ export function useKokoroTTS(): UseKokoroTTSReturn {
       const audioBlob = await response.blob();
       const url = URL.createObjectURL(audioBlob);
 
+      // Update credits in localStorage if available in headers
+      const creditsRemaining = response.headers.get('X-Credits-Remaining');
+      if (creditsRemaining && creditsRemaining !== 'unlimited') {
+        try {
+          const creditsData = localStorage.getItem('credits');
+          if (creditsData) {
+            const credits = JSON.parse(creditsData);
+            credits.tts.remaining = parseInt(creditsRemaining);
+            localStorage.setItem('credits', JSON.stringify(credits));
+
+            // Dispatch event to notify other components
+            window.dispatchEvent(new CustomEvent('creditsUpdated', { detail: credits }));
+          }
+        } catch (err) {
+          console.error('Failed to update credits:', err);
+        }
+      }
+
       return url;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate speech';

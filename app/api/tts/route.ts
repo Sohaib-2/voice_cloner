@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { db } from "@/lib/d1-client";
 
 const VOICE_INFO: Record<string, { gender: string; description: string }> = {
   // 🇺🇸 US English - Female
@@ -95,6 +96,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "DeepInfra API key not configured" }, { status: 500 });
     }
 
+    // Check user role and credits
+    const user = await db.prepare(
+      'SELECT role FROM users WHERE id = ?'
+    ).bind(session.userId).first();
+
+    const credits = await db.prepare(
+      'SELECT * FROM user_credits WHERE user_id = ?'
+    ).bind(session.userId).first();
+
+    if (!credits) {
+      return NextResponse.json({ error: "User credits not found" }, { status: 404 });
+    }
+
+    const charCount = text.length;
+    const isAdmin = user?.role === 'admin';
+
+    // Check if enough credits (skip for admin)
+    if (!isAdmin && credits.remaining_tts_chars < charCount) {
+      return NextResponse.json({
+        error: `Not enough TTS credits. You need ${charCount} chars but only have ${credits.remaining_tts_chars} remaining.`
+      }, { status: 403 });
+    }
+
     // Call DeepInfra Kokoro API
     const deepinfraResponse = await fetch(
       "https://api.deepinfra.com/v1/openai/audio/speech",
@@ -122,6 +146,20 @@ export async function POST(request: Request) {
       );
     }
 
+    // Deduct TTS credits (skip for admin)
+    if (!isAdmin) {
+      const newUsed = credits.used_tts_chars + charCount;
+      const newRemaining = credits.total_tts_chars - newUsed;
+
+      await db.prepare(
+        `UPDATE user_credits
+         SET used_tts_chars = ?,
+             remaining_tts_chars = ?,
+             last_updated = ?
+         WHERE user_id = ?`
+      ).bind(newUsed, newRemaining, Date.now(), session.userId).run();
+    }
+
     const audioBuffer = Buffer.from(await deepinfraResponse.arrayBuffer());
     const voiceId = voice || "af_bella";
     const voiceMetadata = VOICE_INFO[voiceId] || { gender: "Unknown", description: "No description available" };
@@ -134,6 +172,7 @@ export async function POST(request: Request) {
         'X-Voice-Id': voiceId,
         'X-Voice-Gender': voiceMetadata.gender,
         'X-Voice-Description': encodeURIComponent(voiceMetadata.description),
+        'X-Credits-Remaining': (!isAdmin ? (credits.total_tts_chars - (credits.used_tts_chars + charCount)).toString() : 'unlimited'),
       },
     });
 

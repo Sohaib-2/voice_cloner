@@ -3,7 +3,7 @@ export const pollJobStatus = async (
   jobId: string,
   onProgress?: (progress: number) => void,
   onStatusUpdate?: (status: string, delayTime?: number, executionTime?: number) => void
-): Promise<{ audio: string; duration: number }> => {
+): Promise<{ audio: string; duration: number; creditsRemaining?: number }> => {
   return new Promise((resolve, reject) => {
     // Get token for authentication
     const token = localStorage.getItem("token");
@@ -30,7 +30,11 @@ export const pollJobStatus = async (
           clearInterval(pollInterval);
           if (onProgress) onProgress(100);
           if (onStatusUpdate) onStatusUpdate("COMPLETED");
-          resolve({ audio: statusData.audio, duration: statusData.duration });
+          resolve({
+            audio: statusData.audio,
+            duration: statusData.duration,
+            creditsRemaining: statusData.creditsRemaining
+          });
         } else if (statusData.status === "FAILED") {
           clearInterval(pollInterval);
           reject(new Error(statusData.error || "Job failed"));

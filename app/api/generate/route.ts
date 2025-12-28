@@ -76,6 +76,20 @@ export async function POST(request: Request) {
     if (useAsync) {
       // Async endpoint returns job ID immediately
       if (data.id) {
+        // Store job metadata in database for later credit deduction
+        const jobId = data.id;
+        const now = Date.now();
+
+        try {
+          await db.prepare(
+            `INSERT INTO recordings (id, user_id, r2_key, duration, char_count, type, created_at, delete_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          ).bind(jobId, session.userId, '', 0, charCount, 'voice_clone_pending', now, 0).run();
+        } catch (dbError) {
+          console.error('Failed to store job metadata:', dbError);
+          // Continue anyway - we'll handle missing metadata gracefully
+        }
+
         return NextResponse.json({
           jobId: data.id,
           status: "IN_QUEUE"
