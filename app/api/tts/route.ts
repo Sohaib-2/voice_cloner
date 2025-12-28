@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
 
 const VOICE_INFO: Record<string, { gender: string; description: string }> = {
   // 🇺🇸 US English - Female
@@ -77,6 +78,12 @@ const VOICE_INFO: Record<string, { gender: string; description: string }> = {
 
 export async function POST(request: Request) {
   try {
+    // Check authentication
+    const session = await getSession(request);
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { text, voice, speed, output_format } = body;
 

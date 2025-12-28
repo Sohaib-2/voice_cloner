@@ -1,12 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { hashPassword } from '@/lib/auth';
+import { hashPassword, verifyToken } from '@/lib/auth';
 import { db } from '@/lib/d1-client';
 import { generateId } from '@/lib/db';
 import { PLANS } from '@/lib/types';
 
+// Check if user is admin
+async function isAdmin(request: Request) {
+  // Get token from cookie
+  const cookieHeader = request.headers.get('cookie');
+  if (!cookieHeader) return false;
+
+  const tokenMatch = cookieHeader.match(/token=([^;]+)/);
+  if (!tokenMatch) return false;
+
+  const session = await verifyToken(tokenMatch[1]);
+  if (!session) return false;
+
+  const user = await db.prepare('SELECT role FROM users WHERE id = ?').bind(session.userId).first();
+  return user?.role === 'admin';
+}
+
 // GET - List all users
 export async function GET(request: NextRequest) {
   try {
+    // Check admin permission
+    if (!await isAdmin(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     const result = await db.prepare(
       `SELECT u.*, uc.*
        FROM users u

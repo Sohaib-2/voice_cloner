@@ -103,11 +103,18 @@ export function useKokoroTTS(): UseKokoroTTSReturn {
     setError(null);
 
     try {
+      // Get token from localStorage
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Not authenticated. Please log in.');
+      }
+
       // Call our API route which uses DeepInfra
       const response = await fetch('/api/tts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           text,

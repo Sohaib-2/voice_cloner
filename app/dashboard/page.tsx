@@ -32,14 +32,23 @@ export default function DashboardPage() {
     setLoading(false);
   }, [router]);
 
-  const handleLogout = () => {
-    // Clear cookie
-    document.cookie = "token=; path=/; max-age=0";
+  const handleLogout = async () => {
+    try {
+      // Call backend logout endpoint to clear HTTP-only cookie
+      await fetch("/api/auth/logout", {
+        method: "POST",
+      });
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+
     // Clear localStorage
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     localStorage.removeItem("credits");
-    router.push("/login");
+
+    // Use window.location.href for hard redirect (clears all state)
+    window.location.href = "/login";
   };
 
   const goToApp = () => {

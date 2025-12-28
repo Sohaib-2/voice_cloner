@@ -248,9 +248,18 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
 
       setProgress(10);
 
+      // Get token for authentication
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Not authenticated. Please log in.");
+      }
+
       const res = await fetch("/api/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
         body: JSON.stringify({
           gen_text: text,
           ref_audio: base64Data,

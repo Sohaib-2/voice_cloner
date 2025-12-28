@@ -5,12 +5,22 @@ export const pollJobStatus = async (
   onStatusUpdate?: (status: string, delayTime?: number, executionTime?: number) => void
 ): Promise<{ audio: string; duration: number }> => {
   return new Promise((resolve, reject) => {
+    // Get token for authentication
+    const token = localStorage.getItem("token");
+    if (!token) {
+      reject(new Error("Not authenticated. Please log in."));
+      return;
+    }
+
     let currentProgress = 20;
     const pollInterval = setInterval(async () => {
       try {
         const statusRes = await fetch("/api/status", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
           body: JSON.stringify({ jobId }),
         });
 

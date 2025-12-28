@@ -10,9 +10,30 @@ import { r2 } from '@/lib/r2-client';
  * - Vercel Cron (if deployed on Vercel)
  * - GitHub Actions scheduled workflow
  * - External cron service (cron-job.org, etc.)
+ *
+ * IMPORTANT: Set CRON_SECRET environment variable and pass it in Authorization header
+ * Example: Authorization: Bearer your-secret-token
  */
 export async function GET(request: Request) {
   try {
+    // Verify authorization token
+    const authHeader = request.headers.get('Authorization');
+    const expectedSecret = process.env.CRON_SECRET;
+
+    if (!expectedSecret) {
+      return NextResponse.json(
+        { error: 'CRON_SECRET not configured' },
+        { status: 500 }
+      );
+    }
+
+    if (!authHeader || authHeader !== `Bearer ${expectedSecret}`) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Invalid or missing Authorization header' },
+        { status: 401 }
+      );
+    }
+
     const now = Date.now();
 
     // Find all recordings that should be deleted (delete_at < now)

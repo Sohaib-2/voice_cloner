@@ -2,6 +2,15 @@
 import { SignJWT, jwtVerify } from 'jose';
 import bcrypt from 'bcryptjs';
 
+// Validate JWT_SECRET is set in production
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('CRITICAL SECURITY ERROR: JWT_SECRET environment variable must be set in production');
+}
+
+if (!process.env.JWT_SECRET) {
+  console.warn('WARNING: Using default JWT_SECRET. This is INSECURE and should only be used in development.');
+}
+
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'voiceforge-super-secret-key-change-in-production'
 );

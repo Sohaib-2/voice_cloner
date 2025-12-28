@@ -32,8 +32,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Save token in cookie and localStorage
-      document.cookie = `token=${data.token}; path=/; max-age=${30 * 24 * 60 * 60}`; // 30 days
+      // Save data in localStorage (cookie is set by backend as HTTP-only)
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
       localStorage.setItem("credits", JSON.stringify(data.credits));

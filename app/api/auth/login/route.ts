@@ -60,7 +60,8 @@ export async function POST(request: NextRequest) {
     // Create token
     const token = await createToken(user.id, user.username);
 
-    return NextResponse.json({
+    // Create response with secure cookie
+    const response = NextResponse.json({
       success: true,
       token,
       user: {
@@ -86,6 +87,18 @@ export async function POST(request: NextRequest) {
         totalAudioDuration: credits.total_audio_duration
       }
     });
+
+    // Set secure HTTP-only cookie
+    const isProduction = process.env.NODE_ENV === 'production';
+    response.cookies.set('token', token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+      path: '/'
+    });
+
+    return response;
 
   } catch (error: any) {
     console.error('Login error:', error);
