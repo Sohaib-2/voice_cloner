@@ -23,14 +23,14 @@ async function isAdmin(request: Request) {
 // DELETE - Delete user
 export async function DELETE(
   request: Request,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
     if (!await isAdmin(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const { userId } = params;
+    const { userId } = await params;
 
     // Prevent deleting admin users
     const userToDelete = await db.prepare('SELECT role FROM users WHERE id = ?').bind(userId).first();
@@ -60,14 +60,14 @@ export async function DELETE(
 // PATCH - Update user (renew plan, update credits, etc.)
 export async function PATCH(
   request: Request,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
     if (!await isAdmin(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const { userId } = params;
+    const { userId } = await params;
     const body = await request.json();
     const { action, plan, credits } = body;
 

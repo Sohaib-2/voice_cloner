@@ -40,6 +40,11 @@ export default function AdminPage() {
   const [newPlan, setNewPlan] = useState("pro");
   const [creating, setCreating] = useState(false);
 
+  // Custom plan fields
+  const [customVoiceCloning, setCustomVoiceCloning] = useState("1000000");
+  const [customTts, setCustomTts] = useState("1000000");
+  const [customDurationDays, setCustomDurationDays] = useState("30");
+
   // Edit form
   const [editPlan, setEditPlan] = useState("");
   const [editVoiceCloning, setEditVoiceCloning] = useState("");
@@ -71,10 +76,25 @@ export default function AdminPage() {
     setError("");
 
     try {
+      const body: any = {
+        username: newUsername,
+        password: newPassword,
+        plan: newPlan
+      };
+
+      // If custom plan, include custom credits and duration
+      if (newPlan === "custom") {
+        body.customCredits = {
+          voiceCloning: parseInt(customVoiceCloning),
+          tts: parseInt(customTts),
+        };
+        body.customDurationDays = parseInt(customDurationDays);
+      }
+
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: newUsername, password: newPassword, plan: newPlan }),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -84,6 +104,9 @@ export default function AdminPage() {
         setNewUsername("");
         setNewPassword("");
         setNewPlan("pro");
+        setCustomVoiceCloning("1000000");
+        setCustomTts("1000000");
+        setCustomDurationDays("30");
         fetchUsers();
       } else {
         setError(data.error);
@@ -297,6 +320,58 @@ export default function AdminPage() {
                   </select>
                 </div>
               </div>
+
+              {/* Custom Plan Fields */}
+              {newPlan === "custom" && (
+                <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4 space-y-4">
+                  <h3 className="text-sm font-semibold text-purple-500">Custom Plan Settings</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Voice Cloning Credits (chars)</label>
+                      <input
+                        type="number"
+                        value={customVoiceCloning}
+                        onChange={(e) => setCustomVoiceCloning(e.target.value)}
+                        className="w-full px-4 py-2 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                        min="0"
+                        required
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {(parseInt(customVoiceCloning) / 1000).toFixed(0)}k chars
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">TTS Credits (chars)</label>
+                      <input
+                        type="number"
+                        value={customTts}
+                        onChange={(e) => setCustomTts(e.target.value)}
+                        className="w-full px-4 py-2 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                        min="0"
+                        required
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {(parseInt(customTts) / 1000).toFixed(0)}k chars
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Duration (days)</label>
+                      <input
+                        type="number"
+                        value={customDurationDays}
+                        onChange={(e) => setCustomDurationDays(e.target.value)}
+                        className="w-full px-4 py-2 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                        min="1"
+                        required
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Testing: use 1-7 days
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-3">
                 <Button type="submit" disabled={creating}>
                   {creating ? "Creating..." : "Create User"}

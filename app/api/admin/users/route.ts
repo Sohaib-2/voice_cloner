@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { username, password, plan = 'starter' } = body;
+    const { username, password, plan = 'starter', customCredits, customDurationDays } = body;
 
     // Validation
     if (!username || !password) {
@@ -76,11 +76,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate plan exists
     if (!PLANS[plan]) {
       return NextResponse.json(
         { error: 'Invalid plan selected' },
         { status: 400 }
       );
+    }
+
+    // Validate custom plan fields if custom plan is selected
+    if (plan === 'custom') {
+      if (!customCredits || typeof customCredits.voiceCloning !== 'number' || typeof customCredits.tts !== 'number') {
+        return NextResponse.json(
+          { error: 'Custom plan requires voiceCloning and tts credits' },
+          { status: 400 }
+        );
+      }
+      if (!customDurationDays || customDurationDays < 1) {
+        return NextResponse.json(
+          { error: 'Custom plan requires valid duration in days' },
+          { status: 400 }
+        );
+      }
     }
 
     // Check if username exists
@@ -99,8 +116,22 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await hashPassword(password);
     const userId = generateId();
     const now = Date.now();
-    const planConfig = PLANS[plan];
-    const expiresAt = now + (30 * 24 * 60 * 60 * 1000); // 30 days
+
+    // Use custom values for custom plan, otherwise use plan config
+    let voiceCloningChars: number;
+    let ttsChars: number;
+    let expiresAt: number;
+
+    if (plan === 'custom') {
+      voiceCloningChars = customCredits.voiceCloning;
+      ttsChars = customCredits.tts;
+      expiresAt = now + (customDurationDays * 24 * 60 * 60 * 1000);
+    } else {
+      const planConfig = PLANS[plan];
+      voiceCloningChars = planConfig.voiceCloningChars;
+      ttsChars = planConfig.ttsChars;
+      expiresAt = now + (30 * 24 * 60 * 60 * 1000); // 30 days
+    }
 
     // Create user
     await db.prepare(
@@ -117,10 +148,10 @@ export async function POST(request: NextRequest) {
       ) VALUES (?, ?, 0, ?, ?, 0, ?, 0, ?, ?, ?)`
     ).bind(
       userId,
-      planConfig.voiceCloningChars,
-      planConfig.voiceCloningChars,
-      planConfig.ttsChars,
-      planConfig.ttsChars,
+      voiceCloningChars,
+      voiceCloningChars,
+      ttsChars,
+      ttsChars,
       now,
       expiresAt,
       now

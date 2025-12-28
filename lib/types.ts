@@ -5,7 +5,7 @@ export interface User {
   username: string;
   password: string;
   status: 'active' | 'inactive';
-  currentPlan: 'starter' | 'basic' | 'pro' | 'enterprise';
+  currentPlan: 'starter' | 'basic' | 'pro' | 'enterprise' | 'custom';
   planStartedAt: number;
   planExpiresAt: number;
   createdAt: number;
@@ -65,27 +65,34 @@ export const PLANS: Record<string, Plan> = {
     voiceCloningChars: 1000000,    // 1M chars/month
     ttsChars: 1000000,
     price: 9.99,
-    maxAudioDuration: 15          // 15 seconds max
+    maxAudioDuration: 25          // 25 seconds max
   },
   basic: {
     name: "Basic Pack",
     voiceCloningChars: 3000000,    // 3M chars/month
     ttsChars: 3000000,
     price: 29.99,
-    maxAudioDuration: 30
+    maxAudioDuration: 25
   },
   pro: {
     name: "Pro Pack",
     voiceCloningChars: 5000000,   // 5M chars/month
     ttsChars: 5000000,
     price: 49.99,
-    maxAudioDuration: 30
+    maxAudioDuration: 25
   },
   enterprise: {
     name: "Enterprise Pack",
     voiceCloningChars: 10000000,   // 10M chars/month
     ttsChars: 10000000,
     price: 199.99,
-    maxAudioDuration: 60
+    maxAudioDuration: 25
+  },
+  custom: {
+    name: "Custom Plan",
+    voiceCloningChars: 0,          // Set by admin
+    ttsChars: 0,                   // Set by admin
+    price: 0,                      // Set by admin
+    maxAudioDuration: 25           // Default, can be customized
   }
 };

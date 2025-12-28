@@ -14,7 +14,7 @@ interface VoiceCloningTabProps {
 }
 
 export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceCloningTabProps) {
-  const [text, setText] = useState("Hello, This is a test of your new AI voice cloning app.");
+  const [text, setText] = useState("Experience the next generation of voice synthesis. Whether you need cinematic emotion or lightning-fast narration, VoiceForge adapts to you. Clone your own voice in seconds to create a digital twin, or choose from our Pro Library of ultra-realistic speakers. No robotic pauses. No studio required. Just pure, organic sound.");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
