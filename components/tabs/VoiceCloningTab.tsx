@@ -25,6 +25,10 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
   const [regionEnd, setRegionEnd] = useState(0);
   const [isRefPlaying, setIsRefPlaying] = useState(false);
   const [isGenPlaying, setIsGenPlaying] = useState(false);
+  const [genAudioDuration, setGenAudioDuration] = useState(0);
+  const [genAudioSize, setGenAudioSize] = useState(0);
+  const [jobStatus, setJobStatus] = useState<string>("");
+  const [queueTime, setQueueTime] = useState<number>(0);
 
   const refWaveformRef = useRef<HTMLDivElement>(null);
   const genWaveformRef = useRef<HTMLDivElement>(null);
@@ -160,6 +164,8 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
     setLoading(true);
     setAudioSrc(null);
     setProgress(0);
+    setJobStatus("");
+    setQueueTime(0);
 
     try {
       const processedFile = await processAudioFile(file, regionStart, regionEnd, removeNoise);
@@ -184,14 +190,26 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
 
       if (data.jobId) {
         setProgress(20);
-        const result = await pollJobStatus(data.jobId);
-        setProgress(100);
+        const result = await pollJobStatus(
+          data.jobId,
+          (prog) => setProgress(prog),
+          (status, delayTime) => {
+            setJobStatus(status);
+            if (delayTime) setQueueTime(delayTime);
+          }
+        );
         const audioUrl = `data:audio/mp3;base64,${result.audio}`;
         setAudioSrc(audioUrl);
+        // Calculate file size from base64
+        const sizeInBytes = Math.ceil((result.audio.length * 3) / 4);
+        setGenAudioSize(sizeInBytes);
       } else if (data.audio) {
         setProgress(100);
         const audioUrl = `data:audio/mp3;base64,${data.audio}`;
         setAudioSrc(audioUrl);
+        // Calculate file size from base64
+        const sizeInBytes = Math.ceil((data.audio.length * 3) / 4);
+        setGenAudioSize(sizeInBytes);
       } else {
         throw new Error("Invalid response from server");
       }
@@ -223,6 +241,11 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
       });
 
       wavesurfer.load(audioSrc);
+
+      wavesurfer.on("ready", () => {
+        const duration = wavesurfer.getDuration();
+        setGenAudioDuration(duration);
+      });
 
       wavesurfer.on("play", () => setIsGenPlaying(true));
       wavesurfer.on("pause", () => setIsGenPlaying(false));
@@ -395,18 +418,38 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
         </Button>
       </div>
 
-      {/* Progress Bar */}
-      {loading && progress > 0 && (
+      {/* Status Display */}
+      {loading && (
         <div className="space-y-2 animate-fadeIn">
-          <div className="h-2 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <p className="text-center text-sm text-muted-foreground">
-            {progress < 20 ? "Processing audio..." : progress < 90 ? "Generating voice..." : "Almost done..."}
-          </p>
+          {jobStatus === "IN_QUEUE" ? (
+            <div className="text-center">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  In Queue{queueTime > 0 ? ` • Estimated wait: ${Math.ceil(queueTime / 1000)}s` : ""}
+                </p>
+              </div>
+            </div>
+          ) : jobStatus === "IN_PROGRESS" || progress > 0 ? (
+            <>
+              <div className="h-2 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <p className="text-center text-sm text-muted-foreground">
+                {progress < 20 ? "Processing audio..." : progress < 90 ? "Generating voice..." : "Almost done..."}
+              </p>
+            </>
+          ) : (
+            <div className="text-center">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-muted/50 border border-border rounded-xl">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Starting...</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -440,6 +483,26 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
           <div className="bg-card border border-green-500/20 rounded-2xl p-6">
             <div className="bg-muted/50 rounded-xl p-4 mb-4">
               <div ref={genWaveformRef} />
+            </div>
+
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-sm text-muted-foreground">
+                {genAudioDuration > 0 && (
+                  <span className="font-mono text-primary">
+                    Duration: {genAudioDuration.toFixed(2)}s
+                  </span>
+                )}
+                {genAudioSize > 0 && genAudioDuration > 0 && (
+                  <span className="mx-2">•</span>
+                )}
+                {genAudioSize > 0 && (
+                  <span className="font-mono text-primary">
+                    Size: {genAudioSize >= 1024 * 1024
+                      ? `${(genAudioSize / (1024 * 1024)).toFixed(2)} MB`
+                      : `${(genAudioSize / 1024).toFixed(2)} KB`}
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="flex justify-center">

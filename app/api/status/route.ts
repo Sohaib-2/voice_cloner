@@ -37,7 +37,9 @@ export async function POST(request: Request) {
     } else {
       // IN_QUEUE or IN_PROGRESS
       return NextResponse.json({
-        status: data.status
+        status: data.status,
+        delayTime: data.delayTime || 0,
+        executionTime: data.executionTime || 0
       });
     }
 
