@@ -854,7 +854,7 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
                 Recent Audios
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Your last 3 generated voice clones (auto-deleted after 12 hours)
+                Your last 3 generated voice clones
               </p>
             </div>
           </div>

@@ -529,7 +529,7 @@ export default function AIVoicesTab() {
                 Recent TTS Audios
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Your last 3 generated TTS audios (auto-deleted after 12 hours)
+                Your last 3 generated TTS audios
               </p>
             </div>
           </div>
