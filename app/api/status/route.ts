@@ -18,9 +18,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing job ID" }, { status: 400 });
     }
 
+    // Get job metadata to determine which endpoint to use
+    const jobRecord = await db.prepare(
+      'SELECT * FROM recordings WHERE id = ? AND user_id = ?'
+    ).bind(jobId, session.userId).first();
+
+    // Determine which endpoint to poll based on stored metadata
+    const useChatterbox = jobRecord?.r2_key === 'chatterbox';
+    const endpointId = useChatterbox
+      ? process.env.RUNPOD_CHATTERBOX_ENDPOINT_ID
+      : process.env.RUNPOD_ENDPOINT_ID;
+
+    if (!endpointId) {
+      return NextResponse.json({
+        error: `${useChatterbox ? 'Chatterbox' : 'F5-TTS'} endpoint not configured`
+      }, { status: 500 });
+    }
+
     // Poll RunPod for job status
     const statusResponse = await fetch(
-      `https://api.runpod.ai/v2/${process.env.RUNPOD_ENDPOINT_ID}/status/${jobId}`,
+      `https://api.runpod.ai/v2/${endpointId}/status/${jobId}`,
       {
         method: "GET",
         headers: {
@@ -35,13 +52,16 @@ export async function POST(request: Request) {
     if (data.status === "COMPLETED") {
       // Deduct credits for async job completion
       try {
-        // Get job metadata from database
-        const jobRecord = await db.prepare(
-          'SELECT * FROM recordings WHERE id = ? AND user_id = ?'
-        ).bind(jobId, session.userId).first();
+        // Get job metadata from database (reuse jobRecord if already fetched)
+        let completionJobRecord = jobRecord;
+        if (!completionJobRecord) {
+          completionJobRecord = await db.prepare(
+            'SELECT * FROM recordings WHERE id = ? AND user_id = ?'
+          ).bind(jobId, session.userId).first();
+        }
 
-        if (jobRecord && jobRecord.type === 'voice_clone_pending') {
-          const charCount = jobRecord.char_count;
+        if (completionJobRecord && completionJobRecord.type === 'voice_clone_pending') {
+          const charCount = completionJobRecord.char_count;
           const audioDuration = data.output.duration_sec || 0;
 
           // Get user role and credits
