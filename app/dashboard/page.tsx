@@ -132,7 +132,7 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-              VoiceForge
+              Voxxlyy
             </h1>
             <p className="text-muted-foreground mt-1">Dashboard</p>
           </div>
@@ -151,7 +151,7 @@ export default function DashboardPage() {
         {isPlanExpiringSoon && (
           <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
             <p className="text-sm text-amber-600 dark:text-amber-400">
-              ⚠️ Your plan expires in {daysUntilExpiry} day{daysUntilExpiry !== 1 ? 's' : ''}. Please renew to continue using VoiceForge.
+              ⚠️ Your plan expires in {daysUntilExpiry} day{daysUntilExpiry !== 1 ? 's' : ''}. Please renew to continue using Voxxlyy.
             </p>
           </div>
         )}
