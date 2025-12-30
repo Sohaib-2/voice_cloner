@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { gen_text, ref_audio, speed, remove_silence } = body;
+    const { gen_text, ref_audio, speed, remove_silence, language = "en" } = body;
 
     if (!gen_text || !ref_audio) {
       return NextResponse.json({ error: "Missing text or audio" }, { status: 400 });
@@ -48,23 +48,39 @@ export async function POST(request: Request) {
     const useAsync = gen_text.length >= TEXT_LENGTH_THRESHOLD;
     const endpoint = useAsync ? "run" : "runsync";
 
+    // Decide which model to use based on language
+    const useF5TTS = language === "en";
+    const endpointId = useF5TTS ? process.env.RUNPOD_ENDPOINT_ID : process.env.RUNPOD_CHATTERBOX_ENDPOINT_ID;
+    const apiKey = process.env.RUNPOD_API_KEY;
+
+    if (!endpointId || !apiKey) {
+      return NextResponse.json({
+        error: `${useF5TTS ? 'F5-TTS' : 'Chatterbox'} endpoint not configured`
+      }, { status: 500 });
+    }
+
     // 1. Call RunPod Serverless
     const runpodResponse = await fetch(
-      `https://api.runpod.ai/v2/${process.env.RUNPOD_ENDPOINT_ID}/${endpoint}`,
+      `https://api.runpod.ai/v2/${endpointId}/${endpoint}`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.RUNPOD_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          input: {
+          input: useF5TTS ? {
             gen_text,
             ref_audio, // Already Base64 from frontend
             ref_text: "", // Empty = Auto-transcribe
             remove_silence: remove_silence ?? true,
             speed: speed ?? 1.0,
             output_format: "mp3"
+          } : {
+            // Chatterbox-specific input format
+            text: gen_text,
+            ref_audio, // Already Base64 from frontend
+            language: language
           },
         }),
       }

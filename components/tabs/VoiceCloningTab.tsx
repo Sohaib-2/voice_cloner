@@ -2,11 +2,12 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, Wand2, Download, Play, Pause, Volume2, Loader2, Sparkles, Check, Mic, Square, RotateCcw, Clock, Trash2 } from "lucide-react";
+import { Upload, Wand2, Download, Play, Pause, Volume2, Loader2, Sparkles, Check, Mic, Square, RotateCcw, Clock, Trash2, Globe } from "lucide-react";
 import WaveSurfer from "wavesurfer.js";
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.js";
 import { toBase64, processAudioFile } from "@/lib/audioUtils";
 import { pollJobStatus } from "@/lib/apiUtils";
+import { SUPPORTED_LANGUAGES } from "@/lib/languages";
 
 interface VoiceCloningTabProps {
   maxChars: number;
@@ -14,7 +15,8 @@ interface VoiceCloningTabProps {
 }
 
 export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceCloningTabProps) {
-  const [text, setText] = useState("Experience the next generation of voice synthesis. Whether you need cinematic emotion or lightning-fast narration, VoiceForge adapts to you. Clone your own voice in seconds to create a digital twin, or choose from our Pro Library of ultra-realistic speakers. No robotic pauses. No studio required. Just pure, organic sound.");
+  const [selectedLanguage, setSelectedLanguage] = useState("en");
+  const [text, setText] = useState(SUPPORTED_LANGUAGES.find(l => l.code === "en")?.previewText || "");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
@@ -48,6 +50,15 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const charCount = text.length;
+
+  // Update preview text when language changes
+  const handleLanguageChange = (langCode: string) => {
+    setSelectedLanguage(langCode);
+    const lang = SUPPORTED_LANGUAGES.find(l => l.code === langCode);
+    if (lang) {
+      setText(lang.previewText);
+    }
+  };
 
   // Fetch recent recordings
   const fetchRecentAudios = async () => {
@@ -356,6 +367,7 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
           gen_text: text,
           ref_audio: base64Data,
           speed: 1.0,
+          language: selectedLanguage,
         }),
       });
 
@@ -716,12 +728,30 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
           </div>
         </div>
 
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          className="w-full h-40 bg-card border border-border rounded-2xl p-6 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-          placeholder="Type or paste your text here..."
-        />
+        <div className="relative">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            className="w-full h-40 bg-card border border-border rounded-2xl p-6 pr-36 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            placeholder="Type or paste your text here..."
+          />
+
+          {/* Language Selector Inside Text Box */}
+          <div className="absolute top-3 right-3">
+            <select
+              value={selectedLanguage}
+              onChange={(e) => handleLanguageChange(e.target.value)}
+              className="h-10 bg-background/80 backdrop-blur-sm border border-border rounded-lg px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer hover:bg-background transition-colors"
+              title="Select language"
+            >
+              {SUPPORTED_LANGUAGES.map((lang) => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.flag} {lang.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Generate Button */}
