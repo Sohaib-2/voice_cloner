@@ -5,76 +5,91 @@ import { r2 } from "@/lib/r2-client";
 import { generateId } from "@/lib/db";
 
 const VOICE_INFO: Record<string, { gender: string; description: string }> = {
-  // 🇺🇸 US English - Female
+  // 🇺🇸 US English - Female (11 voices)
   "af_heart": { gender: "Female", description: "Warm and expressive with heartfelt delivery" },
-  "af_bella": { gender: "Female", description: "Warm and friendly with natural intonation" },
-  "af_nicole": { gender: "Female", description: "Professional and articulate with dynamic range" },
-  "af_sky": { gender: "Female", description: "Light and airy with youthful energy" },
   "af_alloy": { gender: "Female", description: "Balanced and versatile for general use" },
+  "af_aoede": { gender: "Female", description: "Melodic and harmonious voice" },
+  "af_bella": { gender: "Female", description: "Warm and friendly with natural intonation" },
   "af_jessica": { gender: "Female", description: "Clear and direct with neutral tone" },
   "af_kore": { gender: "Female", description: "Smooth and pleasant with consistent quality" },
-  "af_river": { gender: "Female", description: "Calm and flowing with gentle delivery" },
+  "af_nicole": { gender: "Female", description: "Professional and articulate with dynamic range" },
   "af_nova": { gender: "Female", description: "Modern and crisp with bright tonality" },
+  "af_river": { gender: "Female", description: "Calm and flowing with gentle delivery" },
+  "af_sarah": { gender: "Female", description: "Natural and approachable tone" },
+  "af_sky": { gender: "Female", description: "Light and airy with youthful energy" },
 
-  // 🇺🇸 US English - Male
-  "am_michael": { gender: "Male", description: "Clear and confident with professional tone" },
+  // 🇺🇸 US English - Male (9 voices)
   "am_adam": { gender: "Male", description: "Deep and authoritative with strong presence" },
   "am_echo": { gender: "Male", description: "Resonant and engaging with dynamic range" },
   "am_eric": { gender: "Male", description: "Friendly and approachable with warm delivery" },
+  "am_fenrir": { gender: "Male", description: "Strong and bold with powerful delivery" },
   "am_liam": { gender: "Male", description: "Smooth and articulate with natural flow" },
+  "am_michael": { gender: "Male", description: "Clear and confident with professional tone" },
   "am_onyx": { gender: "Male", description: "Rich and deep with commanding presence" },
   "am_puck": { gender: "Male", description: "Energetic and lively with playful character" },
-  "am_fenrir": { gender: "Male", description: "Strong and bold with powerful delivery" },
+  "am_santa": { gender: "Male", description: "Jolly and warm with cheerful character" },
 
-  // 🇬🇧 British English - Female
+  // 🇬🇧 British English - Female (4 voices)
+  "bf_alice": { gender: "Female", description: "Pleasant British voice with gentle quality" },
   "bf_emma": { gender: "Female", description: "Refined British accent with elegant delivery" },
   "bf_isabella": { gender: "Female", description: "Sophisticated and clear British tone" },
-  "bf_alice": { gender: "Female", description: "Pleasant British voice with gentle quality" },
   "bf_lily": { gender: "Female", description: "Soft British accent with delicate expression" },
 
-  // 🇬🇧 British English - Male
-  "bm_george": { gender: "Male", description: "Distinguished British voice with authority" },
-  "bm_lewis": { gender: "Male", description: "Clear British accent with professional tone" },
+  // 🇬🇧 British English - Male (4 voices)
   "bm_daniel": { gender: "Male", description: "Articulate British voice with precision" },
   "bm_fable": { gender: "Male", description: "Narrative British tone with storytelling quality" },
+  "bm_george": { gender: "Male", description: "Distinguished British voice with authority" },
+  "bm_lewis": { gender: "Male", description: "Clear British accent with professional tone" },
 
-  // 🇯🇵 Japanese - Female
-  "jf_hina": { gender: "Female", description: "Gentle Japanese voice with sweet character" },
+  // 🇯🇵 Japanese - Female (4 voices)
   "jf_alpha": { gender: "Female", description: "Clear Japanese delivery with natural flow" },
   "jf_gongitsune": { gender: "Female", description: "Expressive Japanese voice with character" },
   "jf_nezumi": { gender: "Female", description: "Light Japanese tone with delicate quality" },
   "jf_tebukuro": { gender: "Female", description: "Warm Japanese voice with friendly delivery" },
-  "jf_yuki": { gender: "Female", description: "Soft Japanese accent with calm presence" },
 
-  // 🇯🇵 Japanese - Male
+  // 🇯🇵 Japanese - Male (1 voice)
   "jm_kumo": { gender: "Male", description: "Clear Japanese voice with steady delivery" },
 
-  // 🇫🇷 French
-  "ff_siwis": { gender: "Female", description: "Elegant French accent with refined quality" },
-
-  // 🇨🇳 Chinese - Female
+  // 🇨🇳 Mandarin Chinese - Female (4 voices)
   "zf_xiaobei": { gender: "Female", description: "Clear Mandarin voice with pleasant tone" },
   "zf_xiaoni": { gender: "Female", description: "Sweet Mandarin delivery with gentle quality" },
   "zf_xiaoxiao": { gender: "Female", description: "Bright Mandarin voice with cheerful character" },
   "zf_xiaoyi": { gender: "Female", description: "Professional Mandarin tone with clarity" },
 
-  // 🇨🇳 Chinese - Male
+  // 🇨🇳 Mandarin Chinese - Male (4 voices)
   "zm_yunjian": { gender: "Male", description: "Strong Mandarin voice with confident delivery" },
   "zm_yunxi": { gender: "Male", description: "Smooth Mandarin tone with natural flow" },
   "zm_yunxia": { gender: "Male", description: "Warm Mandarin voice with friendly presence" },
   "zm_yunyang": { gender: "Male", description: "Clear Mandarin delivery with steady quality" },
 
-  // 🇪🇸 Spanish
+  // 🇪🇸 Spanish - Female (1 voice)
   "ef_dora": { gender: "Female", description: "Warm Spanish voice with expressive delivery" },
+
+  // 🇪🇸 Spanish - Male (2 voices)
   "em_alex": { gender: "Male", description: "Clear Spanish tone with natural accent" },
   "em_santa": { gender: "Male", description: "Friendly Spanish voice with character" },
 
-  // 🇮🇹 Italian
+  // 🇫🇷 French - Female (1 voice)
+  "ff_siwis": { gender: "Female", description: "Elegant French accent with refined quality" },
+
+  // 🇮🇳 Hindi - Female (2 voices)
+  "hf_alpha": { gender: "Female", description: "Clear Hindi voice with natural delivery" },
+  "hf_beta": { gender: "Female", description: "Warm Hindi tone with pleasant quality" },
+
+  // 🇮🇳 Hindi - Male (2 voices)
+  "hm_omega": { gender: "Male", description: "Strong Hindi voice with confident presence" },
+  "hm_psi": { gender: "Male", description: "Clear Hindi delivery with professional tone" },
+
+  // 🇮🇹 Italian - Female (1 voice)
   "if_sara": { gender: "Female", description: "Melodic Italian voice with expressive quality" },
+
+  // 🇮🇹 Italian - Male (1 voice)
   "im_nicola": { gender: "Male", description: "Clear Italian tone with natural delivery" },
 
-  // 🇧🇷 Portuguese
+  // 🇧🇷 Brazilian Portuguese - Female (1 voice)
   "pf_dora": { gender: "Female", description: "Warm Brazilian Portuguese with lively tone" },
+
+  // 🇧🇷 Brazilian Portuguese - Male (2 voices)
   "pm_alex": { gender: "Male", description: "Clear Brazilian Portuguese with natural flow" },
   "pm_santa": { gender: "Male", description: "Friendly Brazilian Portuguese with character" },
 };
