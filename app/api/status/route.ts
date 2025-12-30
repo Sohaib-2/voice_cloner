@@ -50,6 +50,12 @@ export async function POST(request: Request) {
 
     // Return the status to frontend
     if (data.status === "COMPLETED") {
+      // Handle different output formats between F5-TTS and Chatterbox
+      // F5-TTS: data.output.audio, data.output.duration_sec
+      // Chatterbox might use: data.output.audio_base64 or just data.output
+      const audioData = data.output?.audio || data.output?.audio_base64 || data.output;
+      const audioDuration = data.output?.duration_sec || data.output?.duration || 0;
+
       // Deduct credits for async job completion
       try {
         // Get job metadata from database (reuse jobRecord if already fetched)
@@ -60,9 +66,11 @@ export async function POST(request: Request) {
           ).bind(jobId, session.userId).first();
         }
 
-        if (completionJobRecord && completionJobRecord.type === 'voice_clone_pending') {
+        // Check if this is a pending job (r2_key is 'chatterbox' or 'f5tts', not a full path)
+        const isPending = completionJobRecord?.r2_key === 'chatterbox' || completionJobRecord?.r2_key === 'f5tts';
+
+        if (completionJobRecord && isPending) {
           const charCount = completionJobRecord.char_count;
-          const audioDuration = data.output.duration_sec || 0;
 
           // Get user role and credits
           const user = await db.prepare(
@@ -96,8 +104,8 @@ export async function POST(request: Request) {
           const deleteAt = now + (12 * 60 * 60 * 1000); // 12 hours from now
 
           try {
-            // Convert base64 to buffer
-            const audioBuffer = Buffer.from(data.output.audio, 'base64');
+            // Convert base64 to buffer - use the extracted audioData
+            const audioBuffer = Buffer.from(audioData, 'base64');
 
             // Upload to R2
             await r2.upload(r2Key, audioBuffer, 'audio/mpeg');
@@ -134,8 +142,8 @@ export async function POST(request: Request) {
 
           return NextResponse.json({
             status: "COMPLETED",
-            audio: data.output.audio,
-            duration: data.output.duration_sec,
+            audio: audioData,
+            duration: audioDuration,
             creditsRemaining: updatedCredits?.remaining_voice_cloning_chars || 0
           });
         }
@@ -146,15 +154,15 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         status: "COMPLETED",
-        audio: data.output.audio,
-        duration: data.output.duration_sec
+        audio: audioData,
+        duration: audioDuration
       });
     } else if (data.status === "FAILED") {
-      // Clean up pending job record if it exists
+      // Clean up pending job record if it exists (where r2_key is 'chatterbox' or 'f5tts')
       try {
         await db.prepare(
-          'DELETE FROM recordings WHERE id = ? AND user_id = ? AND type = ?'
-        ).bind(jobId, session.userId, 'voice_clone_pending').run();
+          'DELETE FROM recordings WHERE id = ? AND user_id = ? AND (r2_key = ? OR r2_key = ?)'
+        ).bind(jobId, session.userId, 'chatterbox', 'f5tts').run();
       } catch (cleanupError) {
         console.error('Failed to cleanup failed job:', cleanupError);
       }

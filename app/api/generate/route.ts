@@ -99,10 +99,13 @@ export async function POST(request: Request) {
         try {
           // Store endpoint ID in the r2_key field temporarily to track which endpoint to poll
           const endpointInfo = useF5TTS ? 'f5tts' : 'chatterbox';
+
+          // Use 'voice_clone' as type (constraint only allows 'voice_clone' or 'tts')
+          // We'll use r2_key to store endpointInfo to identify pending jobs
           await db.prepare(
             `INSERT INTO recordings (id, user_id, r2_key, duration, char_count, type, created_at, delete_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-          ).bind(jobId, session.userId, endpointInfo, 0, charCount, 'voice_clone_pending', now, 0).run();
+          ).bind(jobId, session.userId, endpointInfo, 0, charCount, 'voice_clone', now, 0).run();
         } catch (dbError) {
           console.error('Failed to store job metadata:', dbError);
           // Continue anyway - we'll handle missing metadata gracefully
