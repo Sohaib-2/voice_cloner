@@ -76,7 +76,7 @@ export default function Home() {
             <div className="h-9 w-9 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-primary/20">
               <AudioWaveform className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-bold tracking-tight">VoiceForge</span>
+            <span className="text-lg font-bold tracking-tight">Voxxlyy</span>
           </div>
 
           {/* Right Actions */}

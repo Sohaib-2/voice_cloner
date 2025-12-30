@@ -52,7 +52,7 @@ export default function LoginPage() {
           {/* Logo/Title */}
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-              VoiceForge
+              Voxxlyy
             </h1>
             <p className="text-muted-foreground mt-2">Sign in to your account</p>
           </div>

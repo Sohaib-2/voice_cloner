@@ -234,7 +234,33 @@ export default function AIVoicesTab() {
     try {
       setPreviewVoice(voiceId);
       const voiceData = KOKORO_VOICES.find(v => v.id === voiceId);
-      const previewText = `Hello, I'm ${voiceData?.name}. This is how I sound.`;
+
+      // Get language-specific preview text with psychological impact
+      const getPreviewText = (language: string) => {
+        switch (language) {
+          case 'English (US)':
+          case 'English (UK)':
+            return 'Your words have power. Let me bring your vision to life with clarity and emotion.';
+          case 'Spanish':
+            return 'Tus palabras tienen poder. Déjame dar vida a tu visión con claridad y emoción.';
+          case 'French':
+            return 'Vos mots ont du pouvoir. Laissez-moi donner vie à votre vision avec clarté et émotion.';
+          case 'Chinese':
+            return '您的话语充满力量。让我用清晰和情感为您的愿景注入生命。';
+          case 'Japanese':
+            return 'あなたの言葉には力があります。明確さと感情であなたのビジョンに命を吹き込ませてください。';
+          case 'Hindi':
+            return 'आपके शब्दों में शक्ति है। मुझे स्पष्टता और भावना के साथ आपकी दृष्टि को जीवंत करने दें।';
+          case 'Italian':
+            return 'Le tue parole hanno potere. Lascia che dia vita alla tua visione con chiarezza ed emozione.';
+          case 'Portuguese':
+            return 'Suas palavras têm poder. Deixe-me dar vida à sua visão com clareza e emoção.';
+          default:
+            return 'Your words have power. Let me bring your vision to life.';
+        }
+      };
+
+      const previewText = getPreviewText(voiceData?.language || 'English (US)');
 
       const url = await generateSpeech(previewText, voiceId, 1.0);
 
