@@ -14,7 +14,7 @@ type Tab = "clone" | "tts";
 
 export default function Home() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<Tab>("clone");
+  const [activeTab, setActiveTab] = useState<Tab>("tts");
   const [user, setUser] = useState<any>(null);
   const [isMounted, setIsMounted] = useState(false);
 
@@ -28,6 +28,34 @@ export default function Home() {
 
   const maxChars = 50000;
   const maxAudioDuration = 25;
+
+  // Dynamic content based on active tab
+  const tabContent = {
+    tts: {
+      badge: "Pro Voice Library",
+      title: "Your words,",
+      highlight: "professionally voiced.",
+      description: "Choose from our curated collection of premium AI voices. Multiple languages, accents, and styles at your fingertips.",
+      features: [
+        'Instant voice generation',
+        '50+ premium AI voices',
+        'Multiple accents & styles'
+      ]
+    },
+    clone: {
+      badge: "AI V2.0 Engine",
+      title: "Your words,",
+      highlight: "perfectly spoken.",
+      description: "Experience the next generation of voice synthesis. Clone your voice in seconds or choose from our pro library.",
+      features: [
+        'Ultra-low latency generation',
+        'Studio quality 48kHz audio',
+        'Emotional range control'
+      ]
+    }
+  };
+
+  const content = tabContent[activeTab];
 
   if (!isMounted) return null;
 
@@ -89,30 +117,31 @@ export default function Home() {
           {/* Left Column: Text (Sticky) */}
           {/* CHANGED: Adjusted column span from 4 to 3 to give the tool more room */}
           <div className="lg:col-span-3 lg:sticky lg:top-24 pt-4">
-             <motion.div 
+             <motion.div
+                key={activeTab}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.5 }}
              >
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/20 rounded-full text-primary text-xs font-medium mb-6">
                   <Sparkles className="w-3 h-3" />
-                  <span>AI V2.0 Engine</span>
+                  <span>{content.badge}</span>
                 </div>
 
                 <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-6 leading-tight">
-                  Your words, <br />
+                  {content.title} <br />
                   <span className="bg-gradient-to-r from-primary via-purple-500 to-pink-500 bg-clip-text text-transparent">
-                    perfectly spoken.
+                    {content.highlight}
                   </span>
                 </h1>
-                
+
                 <p className="text-muted-foreground text-lg mb-8 leading-relaxed">
-                  Experience the next generation of voice synthesis. Clone your voice in seconds or choose from our pro library.
+                  {content.description}
                 </p>
 
                 {/* Feature List */}
                 <ul className="space-y-3 mb-8">
-                  {['Ultra-low latency generation', 'Studio quality 48kHz audio', 'Emotional range control'].map((item, i) => (
+                  {content.features.map((item, i) => (
                     <li key={i} className="flex items-center gap-3 text-sm font-medium text-foreground/80">
                       <CheckCircle2 className="w-4 h-4 text-green-500" />
                       {item}
@@ -133,7 +162,7 @@ export default function Home() {
                 {/* Tabs */}
                 <div className="flex items-center justify-between mb-6">
                   <div className="inline-flex p-1 bg-muted/50 border border-border/50 rounded-xl">
-                    {(["clone", "tts"] as const).map((tab) => (
+                    {(["tts", "clone"] as const).map((tab) => (
                       <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -150,8 +179,8 @@ export default function Home() {
                           />
                         )}
                         <span className="relative z-10 flex items-center gap-2">
-                          {tab === "clone" ? <Mic className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
-                          {tab === "clone" ? "Voice Cloning" : "AI Voices"}
+                          {tab === "tts" ? <Sparkles className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                          {tab === "tts" ? "AI Voices" : "Voice Cloning"}
                         </span>
                       </button>
                     ))}
