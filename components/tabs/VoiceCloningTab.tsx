@@ -16,6 +16,7 @@ interface VoiceCloningTabProps {
 
 export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceCloningTabProps) {
   const [selectedLanguage, setSelectedLanguage] = useState("en");
+  const [refLanguage, setRefLanguage] = useState("en");
   const [text, setText] = useState(SUPPORTED_LANGUAGES.find(l => l.code === "en")?.previewText || "");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -368,6 +369,7 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
           ref_audio: base64Data,
           speed: 1.0,
           language: selectedLanguage,
+          ref_language: refLanguage,
         }),
       });
 
@@ -520,35 +522,54 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
     <div className="space-y-8 animate-fadeIn">
       {/* Reference Voice Section */}
       <div className="relative">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <Volume2 className="w-5 h-5 text-primary" />
-              Reference Voice
-            </h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              {inputMode === "upload" ? `Upload and trim your voice sample (max ${maxAudioDuration}s)` : `Record your voice directly (max ${maxAudioDuration}s)`}
-            </p>
+        <div className="flex flex-col gap-4 mb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <Volume2 className="w-5 h-5 text-primary" />
+                Reference Voice
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                {inputMode === "upload" ? `Upload and trim your voice sample (max ${maxAudioDuration}s)` : `Record your voice directly (max ${maxAudioDuration}s)`}
+              </p>
+            </div>
+
+            {file && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setRemoveNoise(!removeNoise)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    removeNoise ? 'bg-primary' : 'bg-muted'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      removeNoise ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+                <Sparkles className={`w-4 h-4 ${removeNoise ? 'text-primary' : 'text-muted-foreground'}`} />
+                <span className="text-sm text-muted-foreground">Clean Audio</span>
+              </div>
+            )}
           </div>
 
-          {file && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setRemoveNoise(!removeNoise)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  removeNoise ? 'bg-primary' : 'bg-muted'
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    removeNoise ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
-              </button>
-              <Sparkles className={`w-4 h-4 ${removeNoise ? 'text-primary' : 'text-muted-foreground'}`} />
-              <span className="text-sm text-muted-foreground">Clean Audio</span>
-            </div>
-          )}
+          {/* Reference Audio Language Selector */}
+          <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl border border-border/50">
+            <Globe className="w-4 h-4 text-muted-foreground" />
+            <label className="text-sm font-medium text-foreground">Reference Audio Language:</label>
+            <select
+              value={refLanguage}
+              onChange={(e) => setRefLanguage(e.target.value)}
+              className="flex-1 h-9 bg-background border border-border rounded-lg px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer hover:bg-accent transition-colors"
+            >
+              {SUPPORTED_LANGUAGES.map((lang) => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.flag} {lang.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Mode Toggle */}
@@ -728,31 +749,44 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
           </div>
         </div>
 
+        {/* Output Language Selector */}
+        <div className="flex items-center gap-3 p-3 mb-3 bg-muted/30 rounded-xl border border-border/50">
+          <Globe className="w-4 h-4 text-muted-foreground" />
+          <label className="text-sm font-medium text-foreground">Output Language:</label>
+          <select
+            value={selectedLanguage}
+            onChange={(e) => handleLanguageChange(e.target.value)}
+            className="flex-1 h-9 bg-background border border-border rounded-lg px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer hover:bg-accent transition-colors"
+          >
+            {SUPPORTED_LANGUAGES.map((lang) => (
+              <option key={lang.code} value={lang.code}>
+                {lang.flag} {lang.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="relative">
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="w-full h-40 bg-card border border-border rounded-2xl p-6 pr-36 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            className="w-full h-40 bg-card border border-border rounded-2xl p-6 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
             placeholder="Type or paste your text here..."
           />
-
-          {/* Language Selector Inside Text Box */}
-          <div className="absolute top-3 right-3">
-            <select
-              value={selectedLanguage}
-              onChange={(e) => handleLanguageChange(e.target.value)}
-              className="h-10 bg-background/80 backdrop-blur-sm border border-border rounded-lg px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer hover:bg-background transition-colors"
-              title="Select language"
-            >
-              {SUPPORTED_LANGUAGES.map((lang) => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.flag} {lang.name}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
       </div>
+
+      {/* Cross-Lingual Mode Indicator */}
+      {refLanguage !== selectedLanguage && (
+        <div className="flex justify-center animate-fadeIn">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-xl">
+            <Sparkles className="w-4 h-4 text-purple-500" />
+            <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
+              Cross-lingual mode active: {SUPPORTED_LANGUAGES.find(l => l.code === refLanguage)?.flag} → {SUPPORTED_LANGUAGES.find(l => l.code === selectedLanguage)?.flag}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Generate Button */}
       <div className="flex justify-center">

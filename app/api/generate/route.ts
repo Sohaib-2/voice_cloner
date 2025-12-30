@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { gen_text, ref_audio, speed, remove_silence, language = "en" } = body;
+    const { gen_text, ref_audio, speed, remove_silence, language = "en", ref_language } = body;
 
     if (!gen_text || !ref_audio) {
       return NextResponse.json({ error: "Missing text or audio" }, { status: 400 });
@@ -80,7 +80,8 @@ export async function POST(request: Request) {
             // Chatterbox-specific input format
             text: gen_text,
             ref_audio, // Already Base64 from frontend
-            language: language
+            language: language,
+            ref_language: ref_language || language // Default to output language if not specified
           },
         }),
       }
