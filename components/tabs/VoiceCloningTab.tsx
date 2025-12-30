@@ -522,20 +522,37 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
     <div className="space-y-8 animate-fadeIn">
       {/* Reference Voice Section */}
       <div className="relative">
-        <div className="flex flex-col gap-4 mb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold flex items-center gap-2">
-                <Volume2 className="w-5 h-5 text-primary" />
-                Reference Voice
-              </h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                {inputMode === "upload" ? `Upload and trim your voice sample (max ${maxAudioDuration}s)` : `Record your voice directly (max ${maxAudioDuration}s)`}
-              </p>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Volume2 className="w-5 h-5 text-primary" />
+              Reference Voice
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              {inputMode === "upload" ? `Upload and trim your voice sample (max ${maxAudioDuration}s)` : `Record your voice directly (max ${maxAudioDuration}s)`}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Reference Language Selector - Compact */}
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-muted-foreground" />
+              <select
+                value={refLanguage}
+                onChange={(e) => setRefLanguage(e.target.value)}
+                className="h-9 bg-background/80 backdrop-blur-sm border border-border rounded-lg px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer hover:bg-accent transition-colors"
+                title="Reference audio language"
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.flag} {lang.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {file && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 pl-3 border-l border-border/50">
                 <button
                   onClick={() => setRemoveNoise(!removeNoise)}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
@@ -552,23 +569,6 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
                 <span className="text-sm text-muted-foreground">Clean Audio</span>
               </div>
             )}
-          </div>
-
-          {/* Reference Audio Language Selector */}
-          <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl border border-border/50">
-            <Globe className="w-4 h-4 text-muted-foreground" />
-            <label className="text-sm font-medium text-foreground">Reference Audio Language:</label>
-            <select
-              value={refLanguage}
-              onChange={(e) => setRefLanguage(e.target.value)}
-              className="flex-1 h-9 bg-background border border-border rounded-lg px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer hover:bg-accent transition-colors"
-            >
-              {SUPPORTED_LANGUAGES.map((lang) => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.flag} {lang.name}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
 
@@ -741,29 +741,33 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
               Enter the text you want the AI to speak in the cloned voice
             </p>
           </div>
-          <div className="text-sm">
-            <span className={`font-mono ${charCount > maxChars ? 'text-destructive' : 'text-primary'}`}>
-              {charCount.toLocaleString()}
-            </span>
-            <span className="text-muted-foreground"> / {maxChars.toLocaleString()}</span>
-          </div>
-        </div>
 
-        {/* Output Language Selector */}
-        <div className="flex items-center gap-3 p-3 mb-3 bg-muted/30 rounded-xl border border-border/50">
-          <Globe className="w-4 h-4 text-muted-foreground" />
-          <label className="text-sm font-medium text-foreground">Output Language:</label>
-          <select
-            value={selectedLanguage}
-            onChange={(e) => handleLanguageChange(e.target.value)}
-            className="flex-1 h-9 bg-background border border-border rounded-lg px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer hover:bg-accent transition-colors"
-          >
-            {SUPPORTED_LANGUAGES.map((lang) => (
-              <option key={lang.code} value={lang.code}>
-                {lang.flag} {lang.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-4">
+            {/* Output Language Selector - Compact */}
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-muted-foreground" />
+              <select
+                value={selectedLanguage}
+                onChange={(e) => handleLanguageChange(e.target.value)}
+                className="h-9 bg-background/80 backdrop-blur-sm border border-border rounded-lg px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer hover:bg-accent transition-colors"
+                title="Output language"
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.flag} {lang.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Character Count */}
+            <div className="text-sm pl-3 border-l border-border/50">
+              <span className={`font-mono ${charCount > maxChars ? 'text-destructive' : 'text-primary'}`}>
+                {charCount.toLocaleString()}
+              </span>
+              <span className="text-muted-foreground"> / {maxChars.toLocaleString()}</span>
+            </div>
+          </div>
         </div>
 
         <div className="relative">
