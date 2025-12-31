@@ -119,7 +119,7 @@ export default function LoginPage() {
 
           <div className="mt-6 text-center">
             <button
-              onClick={() => window.open('https://wa.me/447404409273?text=Hi,%20I%20need%20help%20with%20Voxxlyy%20account', '_blank')}
+              onClick={() => window.open('https://wa.me/447448565561?text=Hi,%20I%20need%20help%20with%20Voxxlyy%20account', '_blank')}
               className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
             >
               <MessageCircle className="w-4 h-4" />
