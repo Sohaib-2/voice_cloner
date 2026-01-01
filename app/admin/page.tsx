@@ -312,7 +312,7 @@ export default function AdminPage() {
                     onChange={(e) => setNewPlan(e.target.value)}
                     className="w-full px-4 py-2 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    {Object.keys(PLANS).map((plan) => (
+                    {Object.keys(PLANS).filter(plan => plan !== 'enterprise').map((plan) => (
                       <option key={plan} value={plan}>
                         {PLANS[plan].name}
                       </option>
@@ -781,7 +781,7 @@ export default function AdminPage() {
                     onChange={(e) => setEditPlan(e.target.value)}
                     className="w-full px-4 py-2 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    {Object.keys(PLANS).map((plan) => (
+                    {Object.keys(PLANS).filter(plan => plan !== 'enterprise').map((plan) => (
                       <option key={plan} value={plan}>
                         {PLANS[plan].name}
                       </option>
