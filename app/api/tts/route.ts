@@ -148,7 +148,7 @@ export async function POST(request: Request) {
         body: JSON.stringify({
           model: "hexgrad/Kokoro-82M",
           input: text,
-          voice: voice || "af_bella",
+          voice: voice || "af_nicole",
           response_format: output_format || "mp3",
           speed: speed || 1.0,
         }),

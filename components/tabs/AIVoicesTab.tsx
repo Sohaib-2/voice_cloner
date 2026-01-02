@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 
 export default function AIVoicesTab() {
   const [text, setText] = useState("");
-  const [selectedVoice, setSelectedVoice] = useState<string>("af_bella");
+  const [selectedVoice, setSelectedVoice] = useState<string>("af_nicole");
   const [speed, setSpeed] = useState(1.0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
