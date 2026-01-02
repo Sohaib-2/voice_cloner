@@ -52,6 +52,10 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
 
   const charCount = text.length;
 
+  // Cross-lingual mode has a lower character limit (5000 chars)
+  const isCrossLingual = refLanguage !== selectedLanguage;
+  const effectiveMaxChars = isCrossLingual ? 5000 : maxChars;
+
   // Update preview text when language changes
   const handleLanguageChange = (langCode: string) => {
     setSelectedLanguage(langCode);
@@ -334,8 +338,8 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
       return;
     }
 
-    if (text.length > maxChars) {
-      alert(`Text is too long. Maximum ${maxChars} characters allowed.`);
+    if (text.length > effectiveMaxChars) {
+      alert(`Text is too long. Maximum ${effectiveMaxChars.toLocaleString()} characters allowed${isCrossLingual ? ' for cross-lingual mode' : ''}.`);
       return;
     }
 
@@ -776,10 +780,10 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
 
             {/* Character Count */}
             <div className="text-sm pl-3 border-l border-border/50">
-              <span className={`font-mono ${charCount > maxChars ? 'text-destructive' : 'text-primary'}`}>
+              <span className={`font-mono ${charCount > effectiveMaxChars ? 'text-destructive' : 'text-primary'}`}>
                 {charCount.toLocaleString()}
               </span>
-              <span className="text-muted-foreground"> / {maxChars.toLocaleString()}</span>
+              <span className="text-muted-foreground"> / {effectiveMaxChars.toLocaleString()}</span>
             </div>
           </div>
         </div>
@@ -795,12 +799,12 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
       </div>
 
       {/* Cross-Lingual Mode Indicator */}
-      {refLanguage !== selectedLanguage && (
+      {isCrossLingual && (
         <div className="flex justify-center animate-fadeIn">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-xl">
             <Sparkles className="w-4 h-4 text-purple-500" />
             <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
-              Cross-lingual mode active: {SUPPORTED_LANGUAGES.find(l => l.code === refLanguage)?.flag} → {SUPPORTED_LANGUAGES.find(l => l.code === selectedLanguage)?.flag}
+              Cross-lingual mode active: {SUPPORTED_LANGUAGES.find(l => l.code === refLanguage)?.flag} → {SUPPORTED_LANGUAGES.find(l => l.code === selectedLanguage)?.flag} • Max {effectiveMaxChars.toLocaleString()} chars
             </p>
           </div>
         </div>
@@ -810,7 +814,7 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
       <div className="flex justify-center">
         <Button
           onClick={handleGenerate}
-          disabled={loading || !file || !text || charCount > maxChars}
+          disabled={loading || !file || !text || charCount > effectiveMaxChars}
           className="h-14 px-12 text-lg font-semibold rounded-xl shadow-lg"
           size="lg"
         >
