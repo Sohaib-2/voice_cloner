@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Loader2, LogIn, MessageCircle } from "lucide-react";
+import { Loader2, LogIn } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -116,16 +116,6 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
-
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => window.open('https://wa.me/447448565561?text=Hi,%20I%20need%20help%20with%20Voxxlyy%20account', '_blank')}
-              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
-            >
-              <MessageCircle className="w-4 h-4" />
-              Need an account? Contact us on WhatsApp
-            </button>
-          </div>
         </div>
       </div>
     </div>
