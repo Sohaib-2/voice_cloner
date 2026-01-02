@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/d1-client";
-import { r2 } from "@/lib/r2-client";
 
 export async function POST(request: Request) {
   try {
@@ -23,8 +22,26 @@ export async function POST(request: Request) {
       'SELECT * FROM recordings WHERE id = ? AND user_id = ?'
     ).bind(jobId, session.userId).first();
 
-    // Determine which endpoint to poll based on stored metadata
-    const useChatterbox = jobRecord?.r2_key === 'chatterbox';
+    if (!jobRecord) {
+      return NextResponse.json({
+        error: "Job not found"
+      }, { status: 404 });
+    }
+
+    // Parse metadata from r2_key field
+    // Format: "endpoint_type|storage_path" or just "storage_path" for completed jobs
+    const r2KeyValue = jobRecord.r2_key as string;
+    let endpointType = 'f5tts'; // default
+    let storagePath = r2KeyValue;
+
+    if (r2KeyValue.includes('|')) {
+      const [type, path] = r2KeyValue.split('|');
+      endpointType = type;
+      storagePath = path;
+    }
+
+    // Determine which endpoint to poll
+    const useChatterbox = endpointType === 'chatterbox';
     const endpointId = useChatterbox
       ? process.env.RUNPOD_CHATTERBOX_ENDPOINT_ID
       : process.env.RUNPOD_ENDPOINT_ID;
@@ -50,11 +67,9 @@ export async function POST(request: Request) {
 
     // Return the status to frontend
     if (data.status === "COMPLETED") {
-      // Handle different output formats between F5-TTS and Chatterbox
-      // F5-TTS: data.output.audio, data.output.duration_sec
-      // Chatterbox might use: data.output.audio_base64 or just data.output
-      const audioData = data.output?.audio || data.output?.audio_base64 || data.output;
-      const audioDuration = data.output?.duration_sec || data.output?.duration || 0;
+      // Handlers now return audio_url instead of base64
+      const audioUrl = data.output?.audio_url;
+      const audioDuration = data.output?.duration_sec || data.output?.duration_seconds || data.output?.duration || 0;
 
       // Deduct credits for async job completion
       try {
@@ -66,8 +81,8 @@ export async function POST(request: Request) {
           ).bind(jobId, session.userId).first();
         }
 
-        // Check if this is a pending job (r2_key is 'chatterbox' or 'f5tts', not a full path)
-        const isPending = completionJobRecord?.r2_key === 'chatterbox' || completionJobRecord?.r2_key === 'f5tts';
+        // Check if this is a pending job (r2_key contains '|' delimiter meaning it's pending)
+        const isPending = completionJobRecord?.r2_key.includes('|');
 
         if (completionJobRecord && isPending) {
           const charCount = completionJobRecord.char_count;
@@ -98,24 +113,17 @@ export async function POST(request: Request) {
             ).bind(newUsed, newRemaining, audioDuration, Date.now(), session.userId).run();
           }
 
-          // Save audio to R2 and update database
-          const r2Key = `recordings/${session.userId}/${jobId}.mp3`;
+          // Update database record (handler already uploaded to S3/R2 at storagePath)
           const now = Date.now();
           const deleteAt = now + (12 * 60 * 60 * 1000); // 12 hours from now
 
           try {
-            // Convert base64 to buffer - use the extracted audioData
-            const audioBuffer = Buffer.from(audioData, 'base64');
-
-            // Upload to R2
-            await r2.upload(r2Key, audioBuffer, 'audio/mpeg');
-
-            // Update recording in database
+            // Update recording in database with just the storage path (remove endpoint metadata)
             await db.prepare(
               `UPDATE recordings
                SET r2_key = ?, duration = ?, type = ?, delete_at = ?
                WHERE id = ? AND user_id = ?`
-            ).bind(r2Key, audioDuration, 'voice_clone', deleteAt, jobId, session.userId).run();
+            ).bind(storagePath, audioDuration, 'voice_clone', deleteAt, jobId, session.userId).run();
 
             // Delete old recordings (keep only last 3)
             const allRecordings = await db.prepare(
@@ -127,12 +135,12 @@ export async function POST(request: Request) {
             if (allRecordings.results.length > 3) {
               const toDelete = allRecordings.results.slice(3);
               for (const rec of toDelete) {
-                await r2.delete(rec.r2_key);
+                // Note: Handler manages S3/R2 cleanup, we just remove DB records
                 await db.prepare('DELETE FROM recordings WHERE id = ?').bind(rec.id).run();
               }
             }
           } catch (saveError) {
-            console.error('Failed to save recording:', saveError);
+            console.error('Failed to update recording:', saveError);
           }
 
           // Get updated credits to return
@@ -142,7 +150,7 @@ export async function POST(request: Request) {
 
           return NextResponse.json({
             status: "COMPLETED",
-            audio: audioData,
+            audio_url: audioUrl,
             duration: audioDuration,
             creditsRemaining: updatedCredits?.remaining_voice_cloning_chars || 0
           });
@@ -154,15 +162,18 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         status: "COMPLETED",
-        audio: audioData,
+        audio_url: audioUrl,
         duration: audioDuration
       });
     } else if (data.status === "FAILED") {
-      // Clean up pending job record if it exists (where r2_key is 'chatterbox' or 'f5tts')
+      // Clean up pending job record if it exists (where r2_key contains '|')
       try {
-        await db.prepare(
-          'DELETE FROM recordings WHERE id = ? AND user_id = ? AND (r2_key = ? OR r2_key = ?)'
-        ).bind(jobId, session.userId, 'chatterbox', 'f5tts').run();
+        // Only delete if it's a pending job (contains the metadata delimiter)
+        if (jobRecord.r2_key.includes('|')) {
+          await db.prepare(
+            'DELETE FROM recordings WHERE id = ? AND user_id = ?'
+          ).bind(jobId, session.userId).run();
+        }
       } catch (cleanupError) {
         console.error('Failed to cleanup failed job:', cleanupError);
       }

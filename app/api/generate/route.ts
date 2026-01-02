@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/d1-client";
-import { r2 } from "@/lib/r2-client";
 import { generateId } from "@/lib/db";
 
 const TEXT_LENGTH_THRESHOLD = 500; // Characters threshold for sync vs async
@@ -59,6 +58,10 @@ export async function POST(request: Request) {
       }, { status: 500 });
     }
 
+    // Generate storage path for organized R2 structure
+    const recordingId = generateId();
+    const storagePath = `recordings/${session.userId}/${recordingId}.mp3`;
+
     // 1. Call RunPod Serverless
     const runpodResponse = await fetch(
       `https://api.runpod.ai/v2/${endpointId}/${endpoint}`,
@@ -75,13 +78,15 @@ export async function POST(request: Request) {
             ref_text: "", // Empty = Auto-transcribe
             remove_silence: remove_silence ?? true,
             speed: speed ?? 1.0,
-            output_format: "mp3"
+            output_format: "mp3",
+            storage_path: storagePath // Pass organized path to handler
           } : {
             // Chatterbox-specific input format
             text: gen_text,
             ref_audio, // Already Base64 from frontend
             language: language,
-            ref_language: ref_language || language // Default to output language if not specified
+            ref_language: ref_language || language, // Default to output language if not specified
+            storage_path: storagePath // Pass organized path to handler
           },
         }),
       }
@@ -98,15 +103,13 @@ export async function POST(request: Request) {
         const now = Date.now();
 
         try {
-          // Store endpoint ID in the r2_key field temporarily to track which endpoint to poll
-          const endpointInfo = useF5TTS ? 'f5tts' : 'chatterbox';
-
-          // Use 'voice_clone' as type (constraint only allows 'voice_clone' or 'tts')
-          // We'll use r2_key to store endpointInfo to identify pending jobs
+          // Store metadata with endpoint type for later polling
+          // Format: "endpoint_type|storage_path" so we know which endpoint to poll and where file will be
+          const metadata = `${useF5TTS ? 'f5tts' : 'chatterbox'}|${storagePath}`;
           await db.prepare(
             `INSERT INTO recordings (id, user_id, r2_key, duration, char_count, type, created_at, delete_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-          ).bind(jobId, session.userId, endpointInfo, 0, charCount, 'voice_clone', now, 0).run();
+          ).bind(jobId, session.userId, metadata, 0, charCount, 'voice_clone', now, 0).run();
         } catch (dbError) {
           console.error('Failed to store job metadata:', dbError);
           // Continue anyway - we'll handle missing metadata gracefully
@@ -128,7 +131,7 @@ export async function POST(request: Request) {
       }
 
       // 3. Generation successful - deduct credits
-      const audioDuration = data.output.duration_sec || 0;
+      const audioDuration = data.output.duration_sec || data.output.duration_seconds || 0;
       const newUsed = credits.used_voice_cloning_chars + charCount;
       const newRemaining = credits.total_voice_cloning_chars - newUsed;
 
@@ -141,24 +144,16 @@ export async function POST(request: Request) {
          WHERE user_id = ?`
       ).bind(newUsed, newRemaining, audioDuration, Date.now(), session.userId).run();
 
-      // 4. Save to R2 and database
-      const recordingId = generateId();
-      const r2Key = `recordings/${session.userId}/${recordingId}.mp3`;
+      // 4. Save reference to database (handler already uploaded to S3/R2)
       const now = Date.now();
       const deleteAt = now + (12 * 60 * 60 * 1000); // 12 hours from now
 
       try {
-        // Convert base64 to buffer
-        const audioBuffer = Buffer.from(data.output.audio, 'base64');
-
-        // Upload to R2
-        await r2.upload(r2Key, audioBuffer, 'audio/mpeg');
-
-        // Save to database
+        // Save URL reference to database (audio is already in S3/R2 from handler at storagePath)
         await db.prepare(
           `INSERT INTO recordings (id, user_id, r2_key, duration, char_count, type, created_at, delete_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(recordingId, session.userId, r2Key, audioDuration, charCount, 'voice_clone', now, deleteAt).run();
+        ).bind(recordingId, session.userId, storagePath, audioDuration, charCount, 'voice_clone', now, deleteAt).run();
 
         // 5. Delete old recordings (keep only last 3)
         const allRecordings = await db.prepare(
@@ -170,20 +165,18 @@ export async function POST(request: Request) {
         if (allRecordings.results.length > 3) {
           const toDelete = allRecordings.results.slice(3);
           for (const rec of toDelete) {
-            // Delete from R2
-            await r2.delete(rec.r2_key);
-            // Delete from database
+            // Note: Handler manages S3/R2 cleanup, we just remove DB records
             await db.prepare('DELETE FROM recordings WHERE id = ?').bind(rec.id).run();
           }
         }
       } catch (saveError) {
-        console.error('Failed to save recording:', saveError);
+        console.error('Failed to save recording reference:', saveError);
         // Continue anyway - don't fail the generation
       }
 
       return NextResponse.json({
-        audio: data.output.audio, // Base64 MP3
-        duration: data.output.duration_sec,
+        audio_url: data.output.audio_url, // S3/R2 URL
+        duration: data.output.duration_sec || data.output.duration_seconds,
         creditsRemaining: newRemaining
       });
     }

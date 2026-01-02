@@ -387,19 +387,26 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
             if (delayTime) setQueueTime(delayTime);
           }
         );
-        const audioUrl = `data:audio/mp3;base64,${result.audio}`;
+        const audioUrl = result.audio_url; // Direct S3/R2 URL
         setAudioSrc(audioUrl);
-        // Calculate file size from base64
-        const sizeInBytes = Math.ceil((result.audio.length * 3) / 4);
-        setGenAudioSize(sizeInBytes);
 
-        // Save to localStorage for persistence
-        localStorage.setItem('voiceClone_generatedAudio', JSON.stringify({
-          audioSrc: audioUrl,
-          duration: result.duration || 0,
-          size: sizeInBytes,
-          timestamp: Date.now()
-        }));
+        // Fetch file size from the URL
+        try {
+          const audioResponse = await fetch(audioUrl);
+          const audioBlob = await audioResponse.blob();
+          setGenAudioSize(audioBlob.size);
+
+          // Save to localStorage for persistence
+          localStorage.setItem('voiceClone_generatedAudio', JSON.stringify({
+            audioSrc: audioUrl,
+            duration: result.duration || 0,
+            size: audioBlob.size,
+            timestamp: Date.now()
+          }));
+        } catch (err) {
+          console.error('Failed to fetch audio size:', err);
+          // Continue without size info
+        }
 
         // Update credits if returned
         if (result.creditsRemaining !== undefined) {
@@ -419,21 +426,28 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
 
         // Refresh recent audios
         fetchRecentAudios();
-      } else if (data.audio) {
+      } else if (data.audio_url) {
         setProgress(100);
-        const audioUrl = `data:audio/mp3;base64,${data.audio}`;
+        const audioUrl = data.audio_url; // Direct S3/R2 URL
         setAudioSrc(audioUrl);
-        // Calculate file size from base64
-        const sizeInBytes = Math.ceil((data.audio.length * 3) / 4);
-        setGenAudioSize(sizeInBytes);
 
-        // Save to localStorage for persistence
-        localStorage.setItem('voiceClone_generatedAudio', JSON.stringify({
-          audioSrc: audioUrl,
-          duration: data.duration || 0,
-          size: sizeInBytes,
-          timestamp: Date.now()
-        }));
+        // Fetch file size from the URL
+        try {
+          const audioResponse = await fetch(audioUrl);
+          const audioBlob = await audioResponse.blob();
+          setGenAudioSize(audioBlob.size);
+
+          // Save to localStorage for persistence
+          localStorage.setItem('voiceClone_generatedAudio', JSON.stringify({
+            audioSrc: audioUrl,
+            duration: data.duration || 0,
+            size: audioBlob.size,
+            timestamp: Date.now()
+          }));
+        } catch (err) {
+          console.error('Failed to fetch audio size:', err);
+          // Continue without size info
+        }
 
         // Update credits if returned
         if (data.creditsRemaining !== undefined) {
@@ -454,7 +468,7 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
         // Refresh recent audios
         fetchRecentAudios();
       } else {
-        throw new Error("Invalid response from server");
+        throw new Error("Invalid response from server - no audio_url returned");
       }
     } catch (err: any) {
       alert("Error: " + err.message);
@@ -857,11 +871,21 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
               </p>
             </div>
             <Button
-              onClick={() => {
-                const link = document.createElement('a');
-                link.href = audioSrc;
-                link.download = 'generated-voice.mp3';
-                link.click();
+              onClick={async () => {
+                try {
+                  // For S3/R2 URLs, fetch and create blob for download
+                  const response = await fetch(audioSrc);
+                  const blob = await response.blob();
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = 'generated-voice.mp3';
+                  link.click();
+                  URL.revokeObjectURL(url); // Clean up
+                } catch (err) {
+                  console.error('Download failed:', err);
+                  alert('Failed to download audio. Please try again.');
+                }
               }}
               variant="outline"
               size="sm"
