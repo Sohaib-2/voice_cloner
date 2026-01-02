@@ -205,7 +205,11 @@ export async function POST(request: Request) {
         const toDelete = allRecordings.results.slice(3);
         for (const rec of toDelete) {
           // Delete from R2
-          await r2.delete(rec.r2_key);
+          try {
+            await r2.delete(rec.r2_key);
+          } catch (r2Error) {
+            console.error('Failed to delete from R2:', r2Error);
+          }
           // Delete from database
           await db.prepare('DELETE FROM recordings WHERE id = ?').bind(rec.id).run();
         }

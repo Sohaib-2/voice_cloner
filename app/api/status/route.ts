@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/d1-client";
+import { r2 } from "@/lib/r2-client";
 
 export async function POST(request: Request) {
   try {
@@ -135,7 +136,15 @@ export async function POST(request: Request) {
             if (allRecordings.results.length > 3) {
               const toDelete = allRecordings.results.slice(3);
               for (const rec of toDelete) {
-                // Note: Handler manages S3/R2 cleanup, we just remove DB records
+                // Delete from R2 (skip if it's pending job metadata with '|')
+                if (rec.r2_key && !rec.r2_key.includes('|')) {
+                  try {
+                    await r2.delete(rec.r2_key);
+                  } catch (r2Error) {
+                    console.error('Failed to delete from R2:', r2Error);
+                  }
+                }
+                // Delete from database
                 await db.prepare('DELETE FROM recordings WHERE id = ?').bind(rec.id).run();
               }
             }
