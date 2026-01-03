@@ -52,9 +52,9 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
 
   const charCount = text.length;
 
-  // Cross-lingual mode has a lower character limit (5000 chars)
+  // Cross-lingual mode has a lower character limit (1200 chars - beta)
   const isCrossLingual = refLanguage !== selectedLanguage;
-  const effectiveMaxChars = isCrossLingual ? 5000 : maxChars;
+  const effectiveMaxChars = isCrossLingual ? 1200 : maxChars;
 
   // Update preview text when language changes
   const handleLanguageChange = (langCode: string) => {
@@ -804,7 +804,7 @@ export default function VoiceCloningTab({ maxChars, maxAudioDuration }: VoiceClo
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-xl">
             <Sparkles className="w-4 h-4 text-purple-500" />
             <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
-              Cross-lingual mode active: {SUPPORTED_LANGUAGES.find(l => l.code === refLanguage)?.flag} → {SUPPORTED_LANGUAGES.find(l => l.code === selectedLanguage)?.flag} • Max {effectiveMaxChars.toLocaleString()} chars
+              Cross-lingual mode active: {SUPPORTED_LANGUAGES.find(l => l.code === refLanguage)?.flag} → {SUPPORTED_LANGUAGES.find(l => l.code === selectedLanguage)?.flag} • Max {effectiveMaxChars.toLocaleString()} chars • Beta: limits will increase in future
             </p>
           </div>
         </div>
